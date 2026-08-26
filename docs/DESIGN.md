@@ -1,12 +1,13 @@
 ---
 answers: what is the backend, how are its modules bounded, and what does its API return
-status: specification. No implementation exists as of 2026-08-26
+status: specification; implemented under src/ except watchlist_private detection
 ---
 
 # Random film picker — backend design
 
-**Nothing described here is built.** Every module, route and table below is a
-plan. Present tense denotes intent, not observed behaviour.
+Present tense denotes intent. Where the implementation under `src/` differs
+from this document, the implementation is authoritative; see `README.md`
+§ Status for what is built and what is still open.
 
 ## Scope
 
