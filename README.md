@@ -75,3 +75,4 @@ and by CI. Only `tests/live.test.ts` touches the network, and it skips unless
 ## Documentation
 
 `docs/README.md` routes to the rest and records what is built and what is open.
+`CONTRIBUTING.md` covers branching, commit style and the merge policy.

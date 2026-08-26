@@ -26,6 +26,7 @@ implementation is the authority on behaviour.
 | What we are building, module boundaries, API contract, store schema | `DESIGN.md` | Amend in place. Never append a contradicting note |
 | Why an architectural choice was made | `decisions/DR-<n>-<slug>.md` | A new decision is a new file with the next number. Supersede, never rewrite |
 | Measured facts about Letterboxd's surface | `DESIGN.md` § Measured constraints | Replace the row; carry sample size and date |
+| How work is branched, committed and merged | `../CONTRIBUTING.md` | Amend in place. The remote's merge settings are the enforcement; the document states the rule and its rationale |
 | The outbound proxy for the `html` path | `../README.md` § Configuration, as the `EGRESS_PROXY` setting | One setting, and no more. Never restate deployment topology in a document |
 
 `DESIGN.md` § Extension points covers the classes it owns; this table covers the rest.
