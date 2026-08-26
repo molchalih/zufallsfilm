@@ -45,6 +45,8 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R
   return out;
 }
 
+type Seed = { films: Film[]; total: number };
+
 export function createBuilder(deps: {
   fetcher: Fetcher;
   enricher: Enricher;
@@ -57,9 +59,11 @@ export function createBuilder(deps: {
   const { fetcher, enricher, store, cfg } = deps;
   const now = deps.now ?? (() => Date.now());
   const pageSize = deps.pageSize ?? PAGE_SIZE;
-  const inFlight = new Map<string, Promise<Film[]>>();
+  const inFlight = new Map<string, Promise<{ films: Film[]; complete: boolean }>>();
+  const backfills = new Map<string, Promise<void>>();
 
-  async function scrape(username: string): Promise<Film[]> {
+  // Fetch page 1 only: enough for a pick, and fast.
+  async function firstPage(username: string): Promise<Seed> {
     const first = await fetcher.get(pageUrl(username, 1));
     if (first.classification === "notfound") {
       throw new BuildError(`No such member: ${username}`, "user_not_found");
@@ -75,8 +79,15 @@ export function createBuilder(deps: {
         "watchlist_too_large",
       );
     }
+    return { films: parseWatchlistPage(first.body), total };
+  }
 
-    const films = parseWatchlistPage(first.body);
+  // `seed` is page 1 already in hand. Re-fetching it would spend an extra
+  // upstream request per cold build for a page we just read.
+  async function scrape(username: string, seed?: Seed): Promise<Film[]> {
+    const head = seed ?? (await firstPage(username));
+    const total = head.total;
+    const films = [...head.films];
     const pages = Math.ceil(total / pageSize);
     const rest = await mapLimit(
       Array.from({ length: pages - 1 }, (_, i) => i + 2),
@@ -114,8 +125,22 @@ export function createBuilder(deps: {
     return films.map((f) => ({ ...f, runtime: byLid.get(f.lid)?.runtime ?? null }));
   }
 
+  function startBackfill(username: string, seed: Seed) {
+    if (backfills.has(username)) return;
+    const p = scrape(username, seed)
+      .then(() => undefined)
+      .catch(() => undefined) // a failed backfill must not reject any caller
+      .finally(() => backfills.delete(username));
+    backfills.set(username, p);
+  }
+
   return {
-    inFlightCount: () => inFlight.size,
+    inFlightCount: () => inFlight.size + backfills.size,
+
+    whenSettled(rawUsername: string): Promise<void> {
+      const username = rawUsername.trim().toLowerCase();
+      return backfills.get(username) ?? Promise.resolve();
+    },
 
     async getWatchlist(rawUsername: string) {
       const username = rawUsername.trim().toLowerCase();
@@ -129,11 +154,22 @@ export function createBuilder(deps: {
       }
       let p = inFlight.get(username);
       if (!p) {
-        p = scrape(username).finally(() => inFlight.delete(username));
+        p = firstPage(username)
+          .then((r) => {
+            if (r.total > r.films.length) {
+              startBackfill(username, r);
+              return { films: r.films, complete: false };
+            }
+            // Page 1 already held the whole watchlist; cache it now rather
+            // than re-scraping it on every later request.
+            store.putWatchlist(username, r.films, r.total, now());
+            return { films: r.films, complete: true };
+          })
+          .finally(() => inFlight.delete(username));
         inFlight.set(username, p);
       }
-      const films = await p;
-      return { films: await runtimesFor(films), complete: true, partial: false };
+      const { films, complete } = await p;
+      return { films: await runtimesFor(films), complete, partial: !complete };
     },
   };
 }

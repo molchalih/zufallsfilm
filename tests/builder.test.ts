@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { BuildError, createBuilder, pageUrl } from "../src/builder";
+import { createBuilder, pageUrl } from "../src/builder";
 import { loadConfig } from "../src/config";
 import { openStore } from "../src/store";
 
@@ -62,7 +62,11 @@ test("a short scrape is refused and never stored as complete", async () => {
     store,
     cfg,
   });
-  await expect(b.getWatchlist("u")).rejects.toThrow(BuildError);
+  // A cold call now serves page 1 and backfills; the short scrape fails in the
+  // background, so nothing may be cached as complete.
+  const r = await b.getWatchlist("u");
+  expect(r.partial).toBe(true);
+  await b.whenSettled("u");
   expect(store.getScrape("u")?.complete ?? false).toBe(false);
   store.close();
 });
