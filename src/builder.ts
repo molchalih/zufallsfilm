@@ -1,6 +1,7 @@
 import type { Config } from "./config";
 import type { Enricher } from "./enricher";
 import type { Fetcher } from "./fetcher";
+import { createMetrics, type Metrics } from "./metrics";
 import { parseTotal, parseWatchlistPage } from "./parser";
 import type { Store } from "./store";
 import type { Film } from "./types";
@@ -54,11 +55,13 @@ export function createBuilder(deps: {
   store: Store;
   cfg: Config;
   now?: () => number;
+  metrics?: Metrics;
   // Injectable so tests can span multiple pages without 28-item fixtures.
   pageSize?: number;
 }) {
   const { fetcher, enricher, store, cfg } = deps;
   const now = deps.now ?? (() => Date.now());
+  const metrics = deps.metrics ?? createMetrics();
   const pageSize = deps.pageSize ?? PAGE_SIZE;
   const inFlight = new Map<string, Promise<{ films: Film[]; complete: boolean }>>();
   const backfills = new Map<string, Promise<void>>();
@@ -108,6 +111,10 @@ export function createBuilder(deps: {
 
     const unique = new Map(films.map((f) => [f.lid, f]));
     const all = [...unique.values()];
+    // The 44% silent-loss failure mode shows up here and nowhere else: every
+    // page returns 200 and parses cleanly while the total quietly falls short.
+    metrics.observe("scrape_yield_ratio", total === 0 ? 0 : all.length / total);
+    metrics.inc(all.length === total ? "scrape_complete" : "scrape_incomplete");
     if (all.length !== total) {
       throw new BuildError(
         `Scrape incomplete: parsed ${all.length} of ${total}. Refusing to cache a partial watchlist.`,
@@ -149,9 +156,11 @@ export function createBuilder(deps: {
       try {
         const meta = await enricher.enrich(f);
         store.putFilm(meta, now());
+        metrics.inc(meta.runtime === null ? "enrich_miss" : "enrich_hit");
         return meta;
       } catch {
         // An error is not a miss: return unknown without poisoning the cache.
+        metrics.inc("enrich_error");
         return { lid: f.lid, runtime: null, rating: null, poster: null };
       }
     });

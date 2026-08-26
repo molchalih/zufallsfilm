@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { createApp } from "../src/app";
 import { BuildError } from "../src/builder";
 import { loadConfig } from "../src/config";
+import { createMetrics } from "../src/metrics";
 import { createLimiter } from "../src/ratelimit";
 import { openStore } from "../src/store";
 
@@ -35,6 +36,7 @@ test("health reports egress configuration", async () => {
     store: openStore(":memory:"),
     cfg,
     limiter: limiter(),
+    metrics: createMetrics(),
   });
   const r = await app.request("/health");
   expect(r.status).toBe(200);
@@ -47,6 +49,7 @@ test("pick requires a user parameter", async () => {
     store: openStore(":memory:"),
     cfg,
     limiter: limiter(),
+    metrics: createMetrics(),
   });
   const r = await app.request("/pick");
   expect(r.status).toBe(400);
@@ -58,6 +61,7 @@ test("pick returns a film from the watchlist", async () => {
     store: openStore(":memory:"),
     cfg,
     limiter: limiter(),
+    metrics: createMetrics(),
   });
   const body = await json(await app.request("/pick?user=u"));
   expect(["a", "b"]).toContain(body.film.lid);
@@ -70,6 +74,7 @@ test("pick honours maxRuntime", async () => {
     store: openStore(":memory:"),
     cfg,
     limiter: limiter(),
+    metrics: createMetrics(),
   });
   const body = await json(await app.request("/pick?user=u&maxRuntime=90"));
   expect(body.film.lid).toBe("a");
@@ -81,6 +86,7 @@ test("pick returns no_match when the filter excludes everything", async () => {
     store: openStore(":memory:"),
     cfg,
     limiter: limiter(),
+    metrics: createMetrics(),
   });
   const r = await app.request("/pick?user=u&maxRuntime=10");
   expect(r.status).toBe(404);
@@ -106,6 +112,7 @@ test("build errors map to their documented status codes", async () => {
       store: openStore(":memory:"),
       cfg,
       limiter: limiter(),
+      metrics: createMetrics(),
     });
     const r = await app.request("/pick?user=u");
     expect(r.status).toBe(status);
@@ -124,6 +131,7 @@ test("a throttled caller gets 429", async () => {
       distinctUsersPerWindow: 100,
       windowMs: 60_000,
     }),
+    metrics: createMetrics(),
   });
   expect((await app.request("/pick?user=u")).status).toBe(200);
   expect((await app.request("/pick?user=u")).status).toBe(429);
@@ -135,6 +143,7 @@ test("watchlist responses are paginated", async () => {
     store: openStore(":memory:"),
     cfg,
     limiter: limiter(),
+    metrics: createMetrics(),
   });
   const body = await json(await app.request("/watchlist/u?perPage=1&page=2"));
   expect(body.count).toBe(2);

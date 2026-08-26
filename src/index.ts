@@ -5,6 +5,7 @@ import { createBuilder } from "./builder";
 import { loadConfig } from "./config";
 import { createEnricher } from "./enricher";
 import { createFetcher, createRateGate } from "./fetcher";
+import { createMetrics } from "./metrics";
 import { createLimiter } from "./ratelimit";
 import { openStore } from "./store";
 
@@ -21,7 +22,8 @@ const store = openStore(cfg.dbPath);
 const gate = createRateGate(Number(process.env.GLOBAL_REQ_PER_SEC ?? 8));
 const fetcher = createFetcher(cfg, fetch, undefined, gate);
 const enricher = createEnricher(fetcher);
-const builder = createBuilder({ fetcher, enricher, store, cfg });
+const metrics = createMetrics();
+const builder = createBuilder({ fetcher, enricher, store, cfg, metrics });
 const limiter = createLimiter({
   ratePerMin: Number(process.env.RATE_PER_MIN ?? 20),
   burst: Number(process.env.RATE_BURST ?? 10),
@@ -53,7 +55,7 @@ for (const sig of ["SIGTERM", "SIGINT"] as const) {
   });
 }
 
-const app = createApp({ builder, store, cfg, limiter });
+const app = createApp({ builder, store, cfg, limiter, metrics });
 
 console.log(
   JSON.stringify({

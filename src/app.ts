@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import type { Builder } from "./builder";
 import { BuildError } from "./builder";
 import type { Config } from "./config";
+import type { Metrics } from "./metrics";
 import { pick } from "./picker";
 import type { Limiter } from "./ratelimit";
 import type { Store } from "./store";
@@ -37,9 +38,34 @@ const shape = (f: Shaped) => ({
   url: `https://letterboxd.com/film/${f.slug}/`,
 });
 
-export function createApp(deps: { builder: Builder; store: Store; cfg: Config; limiter: Limiter }) {
-  const { builder, cfg, limiter } = deps;
+export function createApp(deps: {
+  builder: Builder;
+  store: Store;
+  cfg: Config;
+  limiter: Limiter;
+  metrics: Metrics;
+}) {
+  const { builder, cfg, limiter, metrics } = deps;
   const app = new Hono();
+
+  app.use("*", async (c, next) => {
+    const t0 = Date.now();
+    await next();
+    const ms = Date.now() - t0;
+    metrics.inc(`http_${c.res.status}`);
+    metrics.observe("http_ms", ms);
+    console.log(
+      JSON.stringify({
+        event: "request",
+        method: c.req.method,
+        path: new URL(c.req.url).pathname,
+        status: c.res.status,
+        ms,
+      }),
+    );
+  });
+
+  app.get("/metrics", (c) => c.json(metrics.snapshot()));
 
   const clientIp = (c: Context) => c.req.header("x-forwarded-for")?.split(",")[0].trim() ?? "local";
 
