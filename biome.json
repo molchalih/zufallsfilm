@@ -9,5 +9,16 @@
       "suspicious": { "noExplicitAny": "warn" },
       "complexity": { "noForEach": "off" }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["tests/**/*.ts"],
+      "linter": {
+        "rules": {
+          "style": { "noNonNullAssertion": "off" },
+          "suspicious": { "noExplicitAny": "off" }
+        }
+      }
+    }
+  ]
 }
