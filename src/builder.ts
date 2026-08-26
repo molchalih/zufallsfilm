@@ -85,7 +85,7 @@ export function createBuilder(deps: {
 
   // `seed` is page 1 already in hand. Re-fetching it would spend an extra
   // upstream request per cold build for a page we just read.
-  async function scrape(username: string, seed?: Seed): Promise<Film[]> {
+  async function scrapeOnce(username: string, seed?: Seed): Promise<Film[]> {
     const head = seed ?? (await firstPage(username));
     const total = head.total;
     const films = [...head.films];
@@ -118,10 +118,34 @@ export function createBuilder(deps: {
     return all;
   }
 
+  // A film added or removed between page 1 and page N shifts every later
+  // entry, so a count mismatch is expected occasionally. Retry once against a
+  // fresh total before treating it as a genuine failure. The retry drops the
+  // seed deliberately: the stale page 1 is what produced the bad total.
+  async function scrape(username: string, seed?: Seed): Promise<Film[]> {
+    try {
+      return await scrapeOnce(username, seed);
+    } catch (e) {
+      if (e instanceof BuildError && e.reason === "incomplete") {
+        return await scrapeOnce(username);
+      }
+      throw e;
+    }
+  }
+
   async function runtimesFor(films: Film[]) {
     const metas = await mapLimit(films, ENRICH_CONCURRENCY, async (f) => {
       const cached = store.getFilm(f.lid, now(), cfg.filmTtlMs, cfg.negativeTtlMs);
-      if (cached) return cached;
+      if (cached && !cached.metaStale) return cached;
+      if (cached) {
+        // Posters and ratings drift; runtimes do not. Refresh out of band so
+        // staleness never gates a pick.
+        enricher
+          .enrich(f)
+          .then((m) => store.putFilm(m, now()))
+          .catch(() => {});
+        return cached;
+      }
       try {
         const meta = await enricher.enrich(f);
         store.putFilm(meta, now());

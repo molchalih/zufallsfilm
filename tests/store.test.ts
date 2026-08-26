@@ -84,3 +84,15 @@ test("eviction removes the least recently fetched films first", () => {
   expect(s.getFilm("new", 5000, 1e9, 1e9)).not.toBeNull();
   s.close();
 });
+
+test("posters and ratings are flagged stale before the film TTL expires", () => {
+  const s = fresh();
+  s.putFilm({ lid: "a", runtime: 90, rating: 4, poster: "p.jpg" }, 1000);
+  // Fresh: inside the 7-day staleness window.
+  expect(s.getFilm("a", 1000 + 10, 1e9, 1e9, 100)!.metaStale).toBe(false);
+  // Stale metadata, but the row is still served rather than discarded.
+  const stale = s.getFilm("a", 1000 + 101, 1e9, 1e9, 100)!;
+  expect(stale.metaStale).toBe(true);
+  expect(stale.runtime).toBe(90);
+  s.close();
+});

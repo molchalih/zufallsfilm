@@ -135,13 +135,27 @@ export function openStore(path: string) {
         .all(username) as Film[];
     },
 
-    getFilm(lid: string, now: number, filmTtlMs: number, negativeTtlMs: number): FilmMeta | null {
+    getFilm(
+      lid: string,
+      now: number,
+      filmTtlMs: number,
+      negativeTtlMs: number,
+      staleMetaMs = 7 * 24 * 60 * 60 * 1000,
+    ): (FilmMeta & { metaStale: boolean }) | null {
       const r = db.query(`SELECT * FROM film WHERE lid = ?`).get(lid) as FilmRecord | null;
       if (!r) return null;
       // A miss is not a fact: unknown runtimes expire on the short TTL.
       const ttl = r.runtime === null ? negativeTtlMs : filmTtlMs;
       if (now - r.fetched_at >= ttl) return null;
-      return { lid: r.lid, runtime: r.runtime, rating: r.rating, poster: r.poster };
+      // Posters and ratings drift where runtimes do not, so they carry a
+      // shorter staleness flag that the caller refreshes out of band.
+      return {
+        lid: r.lid,
+        runtime: r.runtime,
+        rating: r.rating,
+        poster: r.poster,
+        metaStale: now - r.fetched_at >= staleMetaMs,
+      };
     },
 
     putFilm(meta: FilmMeta, now: number) {
