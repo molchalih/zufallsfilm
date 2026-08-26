@@ -2,3 +2,5 @@
 set -euo pipefail
 echo "pre-commit: typecheck, lint, tests"
 bun run check
+echo "pre-commit: style"
+scripts/check-style.sh

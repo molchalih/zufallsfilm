@@ -7,7 +7,8 @@
     "lint": "biome check src tests",
     "format": "biome check --write src tests",
     "test": "bun test",
-    "check": "bun run typecheck && bun run lint && bun test"
+    "check": "bun run typecheck && bun run lint && bun test && bun run style",
+    "style": "scripts/check-style.sh"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.10",
