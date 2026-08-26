@@ -1,6 +1,6 @@
 import type { Config } from "./config";
 
-export type Classification = "ok" | "challenge" | "ratelimit" | "notfound" | "error";
+export type Classification = "ok" | "challenge" | "ratelimit" | "notfound" | "timeout" | "error";
 
 export class FetchError extends Error {
   readonly classification: Classification;
@@ -24,10 +24,27 @@ export function classifyResponse(status: number, body: string, headers: Headers)
   return "error";
 }
 
+// One shared ceiling across every user, protecting the shared egress address.
+export function createRateGate(
+  perSecond: number,
+  now: () => number = () => Date.now(),
+  sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+) {
+  const interval = 1000 / perSecond;
+  let nextAt = 0;
+  return async function gate(): Promise<void> {
+    const t = now();
+    const at = Math.max(t, nextAt);
+    nextAt = at + interval;
+    if (at > t) await sleep(at - t);
+  };
+}
+
 export function createFetcher(
   cfg: Config,
   fetchImpl: typeof fetch = fetch,
   sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms)),
+  gate: () => Promise<void> = async () => {},
 ) {
   async function get(url: string) {
     const u = new URL(url);
@@ -45,12 +62,18 @@ export function createFetcher(
     for (let attempt = 0; attempt <= 2; attempt++) {
       let res: Response;
       try {
+        await gate();
         res = await fetchImpl(url, {
           headers: { "User-Agent": "letterboxd-picker/1.0" },
           signal: AbortSignal.timeout(cfg.requestTimeoutMs),
           ...(cfg.egressProxy ? { proxy: cfg.egressProxy } : {}),
         } as RequestInit);
       } catch (e) {
+        const timedOut =
+          e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
+        if (timedOut) {
+          throw new FetchError(`Timed out after ${cfg.requestTimeoutMs}ms: ${url}`, "timeout");
+        }
         last = "error";
         if (attempt === 2) throw new FetchError(`Network failure for ${url}: ${e}`, "error");
         await sleep(delay);

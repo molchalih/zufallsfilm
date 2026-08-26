@@ -4,7 +4,7 @@ import { createApp } from "./app";
 import { createBuilder } from "./builder";
 import { loadConfig } from "./config";
 import { createEnricher } from "./enricher";
-import { createFetcher } from "./fetcher";
+import { createFetcher, createRateGate } from "./fetcher";
 import { createLimiter } from "./ratelimit";
 import { openStore } from "./store";
 
@@ -17,7 +17,9 @@ if (cfg.dbPath !== ":memory:") {
 }
 const store = openStore(cfg.dbPath);
 
-const fetcher = createFetcher(cfg);
+// createFetcher's third parameter has a default; pass undefined to keep it.
+const gate = createRateGate(Number(process.env.GLOBAL_REQ_PER_SEC ?? 8));
+const fetcher = createFetcher(cfg, fetch, undefined, gate);
 const enricher = createEnricher(fetcher);
 const builder = createBuilder({ fetcher, enricher, store, cfg });
 const limiter = createLimiter({

@@ -10,6 +10,7 @@ export type BuildReason =
   | "watchlist_empty"
   | "watchlist_too_large"
   | "upstream_blocked"
+  | "upstream_timeout"
   | "incomplete";
 
 export class BuildError extends Error {
@@ -89,10 +90,19 @@ export function createBuilder(deps: {
     const total = head.total;
     const films = [...head.films];
     const pages = Math.ceil(total / pageSize);
+    const deadline = now() + cfg.buildBudgetMs;
     const rest = await mapLimit(
       Array.from({ length: pages - 1 }, (_, i) => i + 2),
       PAGE_CONCURRENCY,
-      async (p) => parseWatchlistPage((await fetcher.get(pageUrl(username, p))).body),
+      async (p) => {
+        if (now() > deadline) {
+          throw new BuildError(
+            `Build exceeded ${cfg.buildBudgetMs}ms budget at page ${p}`,
+            "upstream_timeout",
+          );
+        }
+        return parseWatchlistPage((await fetcher.get(pageUrl(username, p))).body);
+      },
     );
     for (const chunk of rest) films.push(...chunk);
 
