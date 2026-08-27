@@ -15,5 +15,6 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bun run lint
+      - run: bun run bundle
       - run: bun test
       - run: scripts/check-style.sh --history

@@ -25,8 +25,9 @@ it is not published.
 
 ## Gate
 
-`bun run check` runs the typecheck, the linter and the tests
-check. It is wired in three places, and none of them are optional:
+`bun run check` runs the typecheck, the linter, a production bundle of the
+interface and the tests. It is wired in three places, and
+none of them are optional:
 
 | Where | Scope |
 |---|---|
@@ -43,6 +44,11 @@ git config core.hooksPath .githooks
 Bun does not typecheck on its own — `bun test` passes with type errors present,
 so `tsc --noEmit` is the only thing standing between the annotations and
 reality. Do not skip the gate with `--no-verify`.
+
+`bun run bundle` is in the gate because the interface has no build step of its
+own: `Bun.serve` bundles `index.html` at boot, so a broken import or an
+unparseable stylesheet is a runtime failure on the first request rather than a
+compile error. The gate builds it once so that failure happens here instead.
 
 ## Tests
 

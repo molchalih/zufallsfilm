@@ -1,5 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
+import index from "../index.html";
 import { createApp } from "./app";
 import { createBuilder } from "./builder";
 import { loadConfig } from "./config";
@@ -65,8 +66,12 @@ console.log(
   }),
 );
 
+// Bun bundles `index.html` and every module it imports, and registers the
+// resulting asset routes itself. Hono keeps the API and owns everything the
+// bundler did not claim, including the 404 document.
 export default {
   port: cfg.port,
+  routes: { "/": index },
   fetch: app.fetch,
   // Bun closes an idle connection after 10 s by default, which silently drops
   // a cold read: a complete scrape enriches every film it has not cached yet,
@@ -74,4 +79,8 @@ export default {
   // timeout DESIGN.md § Build model already treats as the outer bound a
   // response must fit inside, so the server and the proxy agree on the limit.
   idleTimeout: 60,
+  // Opt in, never opt out. `NODE_ENV` is unset in the container, so keying the
+  // dev server off "not production" would ship HMR, an unminified bundle 3x the
+  // size, and every visitor's browser console piped into server stdout.
+  development: process.env.NODE_ENV === "development" ? { hmr: true, console: true } : false,
 };

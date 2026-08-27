@@ -3,3 +3,4 @@ node_modules/
 *.sqlite-journal
 data/
 .env
+.bundle-check/

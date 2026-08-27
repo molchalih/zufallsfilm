@@ -7,6 +7,7 @@ import type { Metrics } from "./metrics";
 import { pick } from "./picker";
 import type { Limiter } from "./ratelimit";
 import type { Store } from "./store";
+import { errorPage } from "./web/errorPage";
 
 type ErrorStatus = 400 | 403 | 404 | 413 | 429 | 502 | 504;
 
@@ -27,14 +28,21 @@ type Shaped = {
   name: string;
   year: number | null;
   runtime: number | null;
+  rating?: number | null;
+  poster?: string | null;
 };
 
+// The shape DESIGN.md § API contract specifies. `rating` and `poster` are
+// optional on the input because the picker only ever reads `runtime`; they are
+// never optional on the output, or a client cannot tell absent from unknown.
 const shape = (f: Shaped) => ({
   lid: f.lid,
   slug: f.slug,
   name: f.name,
   year: f.year,
   runtime: f.runtime,
+  rating: f.rating ?? null,
+  poster: f.poster ?? null,
   url: `https://letterboxd.com/film/${f.slug}/`,
 });
 
@@ -103,7 +111,15 @@ export function createApp(deps: {
       const chosen = pick(pool, { maxRuntime });
       if (!chosen) return c.json({ error: true, reason: "no_match" }, 404);
       const [film] = await builder.enrich([chosen]);
-      return c.json({ film: shape({ ...chosen, ...film }), partial, pool: films.length });
+      return c.json({
+        film: shape({ ...chosen, ...film }),
+        partial,
+        pool: films.length,
+        // Where the film sits in the watchlist, 1-based. A client that shows a
+        // position cannot derive it: the draw is from the whole watchlist and
+        // the page it holds is only part of it.
+        position: films.findIndex((f) => f.lid === chosen.lid) + 1,
+      });
     } catch (e) {
       if (e instanceof BuildError) {
         return c.json({ error: true, reason: e.reason }, STATUS[e.reason] ?? 502);
@@ -138,6 +154,30 @@ export function createApp(deps: {
       }
       return c.json({ error: true, reason: "upstream_blocked" }, 502);
     }
+  });
+
+  // A browser that wandered off the routes gets the design's error page; an
+  // API client gets the same failure as JSON. One `Accept` header decides.
+  const wantsHtml = (c: Context) => (c.req.header("accept") ?? "").includes("text/html");
+
+  app.notFound((c) =>
+    wantsHtml(c)
+      ? c.html(errorPage(404, "route_not_found"), 404)
+      : c.json({ error: true, reason: "route_not_found" }, 404),
+  );
+
+  app.onError((err, c) => {
+    metrics.inc("unhandled_error");
+    console.error(
+      JSON.stringify({
+        event: "unhandled_error",
+        path: new URL(c.req.url).pathname,
+        message: err.message,
+      }),
+    );
+    return wantsHtml(c)
+      ? c.html(errorPage(500, "internal"), 500)
+      : c.json({ error: true, reason: "internal" }, 500);
   });
 
   return app;

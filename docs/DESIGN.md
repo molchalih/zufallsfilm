@@ -1,9 +1,9 @@
 ---
-answers: what is the backend, how are its modules bounded, and what does its API return
+answers: what this service is, how its modules are bounded, what its API returns, and what its interface is made of
 status: specification; implemented under src/ except watchlist_private detection
 ---
 
-# Random film picker — backend design
+# Random film picker — design
 
 Present tense denotes intent. Where the implementation under `src/` differs
 from this document, the implementation is authoritative; see `README.md`
@@ -16,10 +16,14 @@ optionally constrained by runtime.
 
 | In scope | Out of scope (this iteration) |
 |---|---|
-| HTTP JSON API | Any user interface |
+| HTTP JSON API | — |
+| A single-page interface over that API | Any second surface: no native app, no embed |
 | Public watchlists, by username | Private watchlists; authenticated members |
-| Runtime filter | Genre, decade, rating filters |
+| Runtime filter, over the API | A runtime control in the interface. The design has no slot for one; the parameter is reachable only by an API client |
 | Watchlist and film-metadata caching | Multi-user accounts, stored preferences |
+
+The interface is a client of the API and holds no privileges it does not.
+Anything it can do, `curl` can do. See DR-006.
 
 ## Measured constraints
 
@@ -57,7 +61,7 @@ Rows marked *derived* are computed from a measurement, not observed.
 
 ## Architecture
 
-Five modules. The boundary that matters: **only `fetcher` performs I/O.**
+Five server modules. The boundary that matters: **only `fetcher` performs I/O.**
 
 | Module | Responsibility | Depends on |
 |---|---|---|
@@ -66,6 +70,30 @@ Five modules. The boundary that matters: **only `fetcher` performs I/O.**
 | `enricher` | `Film[]` in, runtimes out. Search first, film page on miss | `fetcher` |
 | `store` | Scrapes, entries, film metadata, TTL | SQLite |
 | `picker` | `Film[]` + filter in, one `Film` out. Pure | Nothing |
+
+The interface lives under `src/web/` and depends on the API alone. It is
+bundled by `Bun.serve`'s HTML import and mounted at `/`; Hono keeps every other
+route. Its own boundary mirrors the server's: **only `api.ts` performs I/O.**
+
+`index.html` is the one part of it that sits at the project root, and has to:
+Bun derives the public path of every chunk it emits from the entry document's
+depth, with no setting to override it. From `src/web/index.html` it emitted
+`/../../chunk-<hash>.js` — which every browser normalises to `/chunk-<hash>.js`
+and loads, but which 404s literally, so any intermediary that does not remove
+dot-segments serves a page whose script never arrives.
+
+| Module | Responsibility | Depends on |
+|---|---|---|
+| `api` | The two calls, and mapping a failure to its words. The only fetch | `copy` |
+| `copy` | Every user-visible failure string, keyed by API `reason` | Nothing |
+| `errorPage` | The static error document, rendered by the **server** | `copy` |
+| `spin` | Easing, reel construction, the elimination field, seeded randomness. Pure | Nothing |
+| `anim/*` | One pure frame function per animation, plus the component that draws it | `spin` |
+| `App` | The state machine: idle, loading, spinning, result, error | all of the above |
+
+`copy` is imported by both `src/app.ts` and the browser bundle. The same
+failure has to read the same way whether it is rendered by the server for a
+request that never reached the bundle, or by the client mid-spin.
 
 ### Build model
 
@@ -89,6 +117,33 @@ Serving from page 1 while backfilling makes a cold request answerable in ~2 s.
 A pick drawn from 28 films is still a valid random pick; the response carries
 `partial: true` so a client can say so.
 
+**Enrichment is scoped by the caller, not by the watchlist.** The scrape and
+the enrichment are separate costs, and only the scrape is bounded by the build
+model above. A completed 1200-film scrape whose films are not yet in the shared
+`film` table costs 80 s to enrich in full, which is past every proxy timeout in
+the paragraph above — so `builder.enrich` takes the films it is given and the
+route decides which those are:
+
+| Request | Films enriched | Why |
+|---|---|---|
+| `GET /pick`, no `maxRuntime` | 1 | Draw first, enrich the one film the response carries |
+| `GET /pick` with `maxRuntime` | all, then the winner | A runtime filter has to know every runtime |
+| `GET /watchlist/:user` | the page returned | Enrich the page, not the watchlist behind it |
+
+Measured on a 1200-film watchlist with a cold `film` table: a 120-film page
+took 15 s; a 60-film page, 7.6 s; both, warm, under 1 ms. The interface asks
+for 60.
+
+**`maxRuntime` is the one request that is not bounded this way, and knowingly
+so.** A runtime filter cannot be answered without every runtime, so a filtered
+pick against a large watchlist whose films are not yet cached can exceed the
+60 s inbound timeout and have its connection closed. The upstream work is not
+lost — every enriched film is written to the shared `film` table as it lands —
+so a retry completes. The interface never sends `maxRuntime`; only an API
+client reaches this. Removing the exception means replacing the uniform draw
+with rejection sampling, which is a change to what `picker.pick` guarantees and
+is not made here.
+
 **Coalescing is mandatory, not an optimisation.** Concurrent cold requests for
 the same user must share one build, keyed on the lowercased username. Without
 it, ten requests for a 5269-film watchlist send ~52,000 upstream requests
@@ -98,12 +153,20 @@ from a single address — the outcome the ceilings and the inbound rate limit ex
 
 | Route | Params | Returns |
 |---|---|---|
+| `GET /` | — | The interface. Bundled by `Bun.serve`, not routed by Hono |
 | `GET /health` | — | `{status, egress, version}` |
-| `GET /pick` | `user` (required), `maxRuntime` (optional, minutes) | One film, plus `partial` |
+| `GET /metrics` | — | A flat counter and observation snapshot |
+| `GET /pick` | `user` (required), `maxRuntime` (optional, minutes) | One film, plus `partial`, `pool` and `position` |
 | `GET /watchlist/:user` | `page`, `perPage` (default 100, max 500), `refresh` | `{count, complete, scrapedAt, films[]}` |
+| Anything else | — | 404. The error document if the request accepts `text/html`, otherwise JSON |
 
 `GET /watchlist/:user` is paginated because a watchlist may hold thousands of
 films; returning a 5269-element array is not an acceptable response.
+
+An unrouted request answers in the shape its caller asked for: a browser that
+wandered off gets the design's error page, an API client gets the same failure
+as JSON. The `Accept` header is the only thing that decides, and both read
+their words from the same table below.
 
 Film shape:
 
@@ -115,6 +178,17 @@ Film shape:
   "poster": "https://a.ltrbxd.com/resized/..." }
 ```
 
+`pool` is how many films the draw was made from and `position` is the film's
+1-based place among them. Neither belongs to the film — they describe the draw —
+and neither can be derived by a client, which holds at most one page of a
+watchlist the server drew from in full.
+
+`year`, `runtime`, `rating` and `poster` are `null` when unknown and are never
+omitted: a missing key cannot be told from an unknown value. There is no
+`director` field — the search endpoint does not carry one, and the film page
+that does is a fallback taken by 0.8% of films, so it would be `null` for
+almost every film. The interface shows `rating` in its place.
+
 ### Error reasons
 
 `reason` is the machine-readable field. A new reason is a row here plus a branch
@@ -122,14 +196,27 @@ in the module that raises it.
 
 | Reason | HTTP | Cause |
 |---|---|---|
+| `missing_user` | 400 | `user` absent or blank |
+| `bad_max_runtime` | 400 | `maxRuntime` is not a positive finite number |
 | `user_not_found` | 404 | Profile 404s |
 | `watchlist_empty` | 404 | `data-num-entries` is 0 |
 | `watchlist_private` | 403 | Positive private-marker in the body — never inferred from a bare 403 |
 | `watchlist_too_large` | 413 | Above the configured cap |
 | `no_match` | 404 | Filter excluded every film |
+| `route_not_found` | 404 | No route matched |
+| `throttled_rate` | 429 | Inbound token bucket exhausted for the caller's IP |
+| `throttled_variety` | 429 | Too many distinct usernames from one IP in a window |
 | `upstream_blocked` | 502 | Cloudflare challenge, confirmed by marker |
+| `incomplete` | 502 | A scrape parsed fewer films than `data-num-entries`, twice |
+| `internal` | 500 | An unhandled throw. Logged as `unhandled_error` |
 | `upstream_timeout` | 504 | Egress or total-build timeout |
 | `building` | 202 | Only when page 1 itself is not yet available |
+
+Every reason above has a row in `src/web/copy.ts` giving it a headline, and
+`tests/web-copy.test.ts` reads this table to enforce that. Every **status**
+above has one too, because a proxy in front of this service answers with its
+own HTML document that the client cannot parse as JSON: it arrives carrying a
+status and no reason. The interface never shows a raw reason string.
 
 ## Store
 
@@ -209,7 +296,13 @@ structurally unable to detect loss: a review reproduced a **44% silent loss**
 | `store` | In-memory SQLite: TTL boundaries, atomic replace, removed-film deletion | None |
 | `enricher` | Stubbed `fetcher`: search hit, search miss into film-page fallback, error-not-miss | None |
 | `fetcher` | Local stub HTTP proxy asserting `CONNECT` was received; 403 classification | Loopback |
+| `spin`, `anim/*` | Pure frame functions over a seeded rng: reel invariants, the winner landing on the gate, the elimination field being a permutation | None |
+| `copy`, `errorPage` | Reason-to-words mapping, status fallback, escaping | None |
 | End-to-end | One live smoke test, opt-in by env var | Live |
+
+Every animation is a pure function from a progress value to a list of styles,
+so a frame is asserted on directly and no DOM is involved. The components
+around them do nothing but render what those functions return.
 
 Only the last needs working egress, so a broken proxy cannot block the suite.
 
@@ -224,6 +317,8 @@ Only the last needs working egress, so a broken proxy cannot block the suite.
 | A new egress setting | A row in § Egress |
 | A new failure mode | A row in § Failure modes, with its detection predicate |
 | A new module | A row in § Architecture, stating what it depends on |
+| A new reveal animation | A module under `src/web/anim/`, a name in `ANIMATIONS`, a reel length in `REEL_FRAMES`, and a test over its frame function |
+| A new user-visible failure string | A row in `src/web/copy.ts`, keyed by the API `reason` — never inline in a component |
 | A new architectural decision | `docs/decisions/DR-<next>-<slug>.md` |
 | A measured fact about Letterboxd | A row in § Measured constraints, with sample size and date |
 | A measured fact about a third-party service | The same table, named as third-party |

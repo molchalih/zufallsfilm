@@ -153,6 +153,76 @@ test("watchlist responses are paginated", async () => {
   expect(body.films[0].lid).toBe("b");
 });
 
+test("a film carries its poster and rating, and says so when it has neither", async () => {
+  const app = createApp({
+    builder: {
+      async getWatchlist() {
+        return {
+          films: [{ ...films[0], rating: 4.54, poster: "https://a.ltrbxd.com/p.jpg" }, films[1]],
+          complete: true,
+          partial: false,
+        };
+      },
+      enrich: async (films: any[]) => films,
+      whenSettled: async () => {},
+      inFlightCount: () => 0,
+    } as any,
+    store: openStore(":memory:"),
+    cfg,
+    limiter: limiter(),
+    metrics: createMetrics(),
+  });
+  const body = await json(await app.request("/watchlist/u"));
+  expect(body.films[0].poster).toBe("https://a.ltrbxd.com/p.jpg");
+  expect(body.films[0].rating).toBe(4.54);
+  // Absent, not omitted: a missing key cannot be told from an unknown value.
+  expect(body.films[1]).toHaveProperty("poster", null);
+  expect(body.films[1]).toHaveProperty("rating", null);
+});
+
+test("an unrouted request answers in the shape its caller asked for", async () => {
+  const app = createApp({
+    builder: okBuilder as any,
+    store: openStore(":memory:"),
+    cfg,
+    limiter: limiter(),
+    metrics: createMetrics(),
+  });
+
+  const api = await app.request("/nope");
+  expect(api.status).toBe(404);
+  expect((await json(api)).reason).toBe("route_not_found");
+
+  const page = await app.request("/nope", { headers: { accept: "text/html" } });
+  expect(page.status).toBe(404);
+  expect(page.headers.get("content-type")).toContain("text/html");
+  expect(await page.text()).toContain("scene missing.");
+});
+
+test("an unhandled throw becomes a 500, not a hang", async () => {
+  const metrics = createMetrics();
+  const app = createApp({
+    builder: {
+      getWatchlist() {
+        throw new TypeError("boom");
+      },
+      enrich: async (films: any[]) => films,
+      whenSettled: async () => {},
+      inFlightCount() {
+        throw new TypeError("boom");
+      },
+    } as any,
+    store: openStore(":memory:"),
+    cfg,
+    limiter: limiter(),
+    metrics,
+  });
+  const r = await app.request("/health", { headers: { accept: "text/html" } });
+  expect(r.status).toBe(500);
+  expect(await r.text()).toContain("projector failure.");
+  expect(metrics.snapshot().unhandled_error).toBe(1);
+});
+
 test("an unfiltered pick enriches one film, not the whole watchlist", async () => {
   // Enriching a 1200-film watchlist to answer a request that returns one film
   // takes longer than any proxy will hold the connection open.
@@ -186,6 +256,9 @@ test("an unfiltered pick enriches one film, not the whole watchlist", async () =
   expect(r.pool).toBe(500);
   expect(r.film.runtime).toBe(90);
   expect(enriched).toBe(1);
+  // A client cannot derive this: it holds one page, the draw was from all 500.
+  expect(r.position).toBe(pool.findIndex((f) => f.lid === r.film.lid) + 1);
+  expect(r.position).toBeGreaterThan(0);
 
   // A runtime filter has to know every runtime, so it still pays for them.
   enriched = 0;

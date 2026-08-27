@@ -3,19 +3,26 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "NODE_ENV=development bun --hot src/index.ts",
+    "start": "bun run src/index.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome check",
+    "bundle": "bun build index.html --outdir .bundle-check --minify",
     "format": "biome check --write",
     "test": "bun test",
-    "check": "bun run typecheck && bun run lint && bun test && bun run style",
+    "check": "bun run typecheck && bun run lint && bun run bundle && bun test && bun run style",
     "style": "scripts/check-style.sh"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.10",
     "@types/bun": "^1.4.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
     "typescript": "^7.0.2"
   },
   "dependencies": {
-    "hono": "^4.13.5"
+    "hono": "^4.13.5",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   }
 }

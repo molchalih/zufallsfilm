@@ -1,0 +1,627 @@
+/* Design tokens. Every colour and face in the UI resolves through one of
+   these; nothing else may hard-code a hex value. */
+:root {
+  --bg: #f2f1ec;
+  --ink: #141414;
+  --muted: #8a887f;
+  --muted-strong: #55534c;
+  --accent: #e0201b;
+  --paper: #e7e5de;
+  --paper-alt: #dedcd4;
+  --hairline: rgba(20, 20, 20, 0.3);
+  --hairline-soft: rgba(20, 20, 20, 0.15);
+  --sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+a:hover {
+  color: var(--accent);
+}
+
+/* The design suppresses the focus ring so the 2 px rule stays clean. The rule
+   itself then has to carry the state, or the page's only text field has no
+   visible focus at all. */
+input:focus {
+  outline: none;
+}
+
+.field-input:focus {
+  border-color: var(--accent);
+}
+
+::selection {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+@keyframes dropIn {
+  from {
+    transform: translateY(-105%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes arrowIn {
+  from {
+    transform: translateX(-0.7em);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* ── Shell ───────────────────────────────────────────────────────────────── */
+
+.app {
+  min-height: 100vh;
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 18px 40px;
+  position: relative;
+  z-index: 2;
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 12px;
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+}
+
+.mark {
+  width: 11px;
+  height: 11px;
+  background: var(--accent);
+  display: inline-block;
+  transform: translateY(1px);
+}
+
+.wordmark-text {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.stage {
+  flex: 1;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 480px;
+}
+
+.track {
+  height: 3px;
+  background: transparent;
+}
+
+.track-bar {
+  height: 100%;
+  background: var(--accent);
+}
+
+.footer {
+  padding: 14px 40px;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  position: relative;
+  z-index: 1;
+}
+
+.footer-text {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.footer-text a {
+  color: var(--muted);
+}
+
+/* ── Idle ────────────────────────────────────────────────────────────────── */
+
+.idle {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 48px 40px 96px;
+  text-align: center;
+}
+
+.idle-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+  width: 100%;
+}
+
+.field {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+  max-width: 600px;
+}
+
+.field-at {
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  border: 2px solid var(--ink);
+  border-right: none;
+  font-size: 20px;
+  font-weight: 700;
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.field-input {
+  flex: 1;
+  min-width: 180px;
+  border: 2px solid var(--ink);
+  background: transparent;
+  font-family: inherit;
+  font-size: 20px;
+  padding: 14px 16px;
+  color: var(--ink);
+}
+
+.field-input::placeholder {
+  color: var(--muted);
+}
+
+.button {
+  border: none;
+  background: var(--accent);
+  color: var(--bg);
+  font-family: inherit;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+}
+
+.button:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.button-primary {
+  font-size: 16px;
+  /* Vertical padding matters only once the button wraps onto its own row,
+     where it no longer stretches to the input's height. */
+  padding: 14px 28px;
+  /* Grows to fill the row it wraps onto, rather than sitting stranded and
+     centred under a full-width input. */
+  flex: 1 0 150px;
+}
+
+.button-reroll {
+  align-self: flex-start;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  padding: 11px 20px;
+}
+
+.link-quiet {
+  font-size: 14px;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  margin-top: -12px;
+  border: none;
+  background: none;
+  font-family: inherit;
+  padding: 0;
+}
+
+.link-quiet:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+.link-quiet:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* ── Result ──────────────────────────────────────────────────────────────── */
+
+.result {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 48px;
+  padding: 48px 40px;
+  align-content: center;
+}
+
+.poster {
+  width: 220px;
+  aspect-ratio: 2 / 3;
+  flex: 0 0 auto;
+  border: 1px solid var(--hairline);
+  background-color: var(--paper);
+  background-size: cover;
+  background-position: center;
+}
+
+.poster-empty {
+  width: 220px;
+  aspect-ratio: 2 / 3;
+  flex: 0 0 auto;
+  border: 1px solid var(--hairline);
+  background: repeating-linear-gradient(45deg, var(--paper) 0 10px, var(--paper-alt) 10px 20px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  text-align: center;
+}
+
+.poster-note {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.result-body {
+  flex: 1 1 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 260px;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(38px, 5.5vw, 84px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 0.98;
+  min-height: 2.05em;
+  text-wrap: balance;
+}
+
+.title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.title-arrow {
+  display: inline-block;
+  vertical-align: super;
+  margin-left: 0.12em;
+}
+
+.title-arrow svg {
+  display: block;
+  overflow: visible;
+}
+
+.facts {
+  max-width: 520px;
+}
+
+.facts-rule {
+  height: 2px;
+  background: var(--ink);
+}
+
+.facts-clip {
+  overflow: hidden;
+}
+
+.facts-row {
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+  padding-top: 16px;
+}
+
+.fact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fact-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.fact-value {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.note {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ── Roll ────────────────────────────────────────────────────────────────── */
+
+.roll {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 40px;
+}
+
+.roll-window {
+  position: relative;
+  height: 320px;
+  overflow: hidden;
+  flex: 1;
+  border-top: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.roll-row {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid var(--hairline-soft);
+  padding: 0 8px;
+}
+
+.roll-num {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.roll-title {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.roll-year {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.roll-gate {
+  position: absolute;
+  top: 128px;
+  left: 0;
+  right: 0;
+  height: 64px;
+  border-top: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+  pointer-events: none;
+}
+
+/* ── Montage ─────────────────────────────────────────────────────────────── */
+
+.montage {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: var(--ink);
+}
+
+.montage-grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(14, 1fr);
+  grid-auto-rows: 1fr;
+  gap: 2px;
+  padding: 2px;
+}
+
+.montage-title-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  mix-blend-mode: difference;
+  z-index: 5;
+}
+
+.montage-title {
+  font-size: clamp(40px, 9vw, 130px);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+  color: #ffffff;
+  text-align: center;
+  padding: 0 30px;
+  text-wrap: balance;
+}
+
+.montage-ticker {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: #ffffff;
+  mix-blend-mode: difference;
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* ── Void ────────────────────────────────────────────────────────────────── */
+
+.void {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.void-caption {
+  position: absolute;
+  left: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 2;
+}
+
+.void-title {
+  font-size: clamp(26px, 3.4vw, 44px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  max-width: 420px;
+  text-wrap: balance;
+}
+
+.void-index {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ── Last one standing ───────────────────────────────────────────────────── */
+
+.elim {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.elim-grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(16, 1fr);
+  align-content: center;
+  overflow: hidden;
+}
+
+/* ── Error ───────────────────────────────────────────────────────────────── */
+
+.error {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 0 40px 32px;
+}
+
+.error-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.error-code {
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.error-headline {
+  font-size: 15px;
+  color: var(--muted-strong);
+}
+
+.error-back {
+  font-size: 14px;
+  color: var(--ink);
+  font-weight: 700;
+  border: none;
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 0;
+}
+
+/* Motion is declared only where it is welcome, rather than declared globally
+   and clawed back with `!important` under a `reduce` query. The reveal reads
+   correctly without any of it: the rule and the facts are simply already there.
+   App.tsx shortens the spin itself under the same preference. */
+@media (prefers-reduced-motion: no-preference) {
+  .title-arrow {
+    animation: arrowIn 550ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  .facts-rule {
+    animation: fadeIn 650ms ease 280ms both;
+  }
+
+  .facts-row {
+    animation: dropIn 650ms cubic-bezier(0.2, 0.8, 0.2, 1) 280ms both;
+  }
+}
