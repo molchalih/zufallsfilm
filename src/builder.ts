@@ -65,6 +65,11 @@ export function createBuilder(deps: {
   const pageSize = deps.pageSize ?? PAGE_SIZE;
   const inFlight = new Map<string, Promise<{ films: Film[]; complete: boolean }>>();
   const backfills = new Map<string, Promise<void>>();
+  // Live enrichment counts, so a caller waiting on a cold build can be shown
+  // how far it has got. Accumulated rather than replaced: two requests for the
+  // same user are in flight at once on a first visit, and the second must not
+  // reset the first's count. Cleared when the last job for the user finishes.
+  const progress = new Map<string, { done: number; total: number; jobs: number }>();
 
   // Fetch page 1 only: enough for a pick, and fast.
   async function firstPage(username: string): Promise<Seed> {
@@ -148,28 +153,53 @@ export function createBuilder(deps: {
    * watchlist to answer a request that returns one page of it costs 80 s on a
    * 1200-film watchlist, which no proxy will hold open.
    */
-  async function enrich(films: Film[]) {
+  async function enrich(rawUsername: string, films: Film[]) {
+    // Normalised on both sides, or a caller that has not lowercased yet files
+    // its progress under a key no reader will look up.
+    const username = rawUsername.trim().toLowerCase();
+    const at = progress.get(username) ?? { done: 0, total: 0, jobs: 0 };
+    at.total += films.length;
+    at.jobs += 1;
+    progress.set(username, at);
+    const step = () => {
+      at.done += 1;
+    };
+    try {
+      return await enrichEach(films, step);
+    } finally {
+      at.jobs -= 1;
+      if (at.jobs === 0) progress.delete(username);
+    }
+  }
+
+  async function enrichEach(films: Film[], step: () => void) {
     const metas = await mapLimit(films, ENRICH_CONCURRENCY, async (f) => {
-      const cached = store.getFilm(f.lid, now(), cfg.filmTtlMs, cfg.negativeTtlMs);
-      if (cached && !cached.metaStale) return cached;
-      if (cached) {
-        // Posters and ratings drift; runtimes do not. Refresh out of band so
-        // staleness never gates a pick.
-        enricher
-          .enrich(f)
-          .then((m) => store.putFilm(m, now()))
-          .catch(() => {});
-        return cached;
-      }
+      // Counted on the way out, whichever branch it takes: a cached hit is
+      // progress too, and a miss that throws still finished being attempted.
       try {
-        const meta = await enricher.enrich(f);
-        store.putFilm(meta, now());
-        metrics.inc(meta.runtime === null ? "enrich_miss" : "enrich_hit");
-        return meta;
-      } catch {
-        // An error is not a miss: return unknown without poisoning the cache.
-        metrics.inc("enrich_error");
-        return { lid: f.lid, runtime: null, rating: null, poster: null };
+        const cached = store.getFilm(f.lid, now(), cfg.filmTtlMs, cfg.negativeTtlMs);
+        if (cached && !cached.metaStale) return cached;
+        if (cached) {
+          // Posters and ratings drift; runtimes do not. Refresh out of band so
+          // staleness never gates a pick.
+          enricher
+            .enrich(f)
+            .then((m) => store.putFilm(m, now()))
+            .catch(() => {});
+          return cached;
+        }
+        try {
+          const meta = await enricher.enrich(f);
+          store.putFilm(meta, now());
+          metrics.inc(meta.runtime === null ? "enrich_miss" : "enrich_hit");
+          return meta;
+        } catch {
+          // An error is not a miss: return unknown without poisoning the cache.
+          metrics.inc("enrich_error");
+          return { lid: f.lid, runtime: null, rating: null, poster: null };
+        }
+      } finally {
+        step();
       }
     });
     const byLid = new Map(metas.map((m) => [m.lid, m]));
@@ -195,6 +225,12 @@ export function createBuilder(deps: {
 
   return {
     enrich,
+
+    /** How far the enrichment a caller is waiting on has got, if any. */
+    progressFor(rawUsername: string): { done: number; total: number } | null {
+      const at = progress.get(rawUsername.trim().toLowerCase());
+      return at ? { done: at.done, total: at.total } : null;
+    },
 
     inFlightCount: () => inFlight.size + backfills.size,
 

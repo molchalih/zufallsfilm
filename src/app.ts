@@ -85,6 +85,14 @@ export function createApp(deps: {
     }),
   );
 
+  // Deliberately outside the rate limiter: it reads a counter, performs no
+  // upstream work, and the interface polls it several times a second while a
+  // cold build runs. Metering it would throttle the request it is reporting on.
+  app.get("/progress/:user", (c) => {
+    const at = builder.progressFor(c.req.param("user"));
+    return c.json(at ?? { done: 0, total: 0 });
+  });
+
   app.get("/pick", async (c) => {
     const user = c.req.query("user")?.trim().toLowerCase();
     if (!user) return c.json({ error: true, reason: "missing_user" }, 400);
@@ -107,10 +115,10 @@ export function createApp(deps: {
       const pool =
         maxRuntime === undefined
           ? films.map((f) => ({ ...f, runtime: null }))
-          : await builder.enrich(films);
+          : await builder.enrich(user, films);
       const chosen = pick(pool, { maxRuntime });
       if (!chosen) return c.json({ error: true, reason: "no_match" }, 404);
-      const [film] = await builder.enrich([chosen]);
+      const [film] = await builder.enrich(user, [chosen]);
       return c.json({
         film: shape({ ...chosen, ...film }),
         partial,
@@ -139,7 +147,7 @@ export function createApp(deps: {
       const { films, complete, partial } = await builder.getWatchlist(user);
       const start = (page - 1) * perPage;
       // Enrich the page, not the watchlist behind it.
-      const window = await builder.enrich(films.slice(start, start + perPage));
+      const window = await builder.enrich(user, films.slice(start, start + perPage));
       return c.json({
         count: films.length,
         complete,

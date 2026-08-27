@@ -78,3 +78,23 @@ export async function fetchPool(user: string): Promise<Pool> {
 export async function fetchPick(user: string): Promise<Pick> {
   return (await getJson(`/pick?user=${encodeURIComponent(user)}`)) as Pick;
 }
+
+export type Progress = { done: number; total: number };
+
+/**
+ * How far the enrichment behind a pending request has got. Polled while a
+ * build runs, so it fails quietly: a progress read that errors must never
+ * disturb the request it is reporting on.
+ */
+export async function fetchProgress(user: string): Promise<Progress | null> {
+  try {
+    const res = await fetch(`/progress/${encodeURIComponent(user)}`, {
+      headers: { accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as Progress;
+    return typeof body?.total === "number" && typeof body.done === "number" ? body : null;
+  } catch {
+    return null;
+  }
+}

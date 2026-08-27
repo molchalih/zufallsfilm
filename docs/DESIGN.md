@@ -117,6 +117,13 @@ Serving from page 1 while backfilling makes a cold request answerable in ~2 s.
 A pick drawn from 28 films is still a valid random pick; the response carries
 `partial: true` so a client can say so.
 
+Enrichment counts are published per username while it runs, which is what the
+interface's loading bar reports. The count is accumulated across concurrent
+jobs rather than replaced, because a first visit has two requests for the same
+user in flight at once and the second must not reset the first's total. Every
+film counts on the way out whether it was a cache hit, a fetch or a failure: a
+film that never resolves would otherwise hold the bar short of the end forever.
+
 **Enrichment is scoped by the caller, not by the watchlist.** The scrape and
 the enrichment are separate costs, and only the scrape is bounded by the build
 model above. A completed 1200-film scrape whose films are not yet in the shared
@@ -156,12 +163,19 @@ from a single address — the outcome the ceilings and the inbound rate limit ex
 | `GET /` | — | The interface. Bundled by `Bun.serve`, not routed by Hono |
 | `GET /health` | — | `{status, egress, version}` |
 | `GET /metrics` | — | A flat counter and observation snapshot |
+| `GET /progress/:user` | — | `{done, total}` for the enrichment a caller is waiting on, or zeroes |
 | `GET /pick` | `user` (required), `maxRuntime` (optional, minutes) | One film, plus `partial`, `pool` and `position` |
 | `GET /watchlist/:user` | `page`, `perPage` (default 100, max 500), `refresh` | `{count, complete, scrapedAt, films[]}` |
 | Anything else | — | 404. The error document if the request accepts `text/html`, otherwise JSON |
 
 `GET /watchlist/:user` is paginated because a watchlist may hold thousands of
 films; returning a 5269-element array is not an acceptable response.
+
+`GET /progress/:user` is the one route outside the inbound rate limiter. It
+reads a counter and performs no upstream work, and the interface polls it
+several times a second while a build runs, so metering it would throttle the
+very request it reports on. It is not an amplifier: nothing it does reaches
+Letterboxd.
 
 An unrouted request answers in the shape its caller asked for: a browser that
 wandered off gets the design's error page, an API client gets the same failure

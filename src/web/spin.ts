@@ -6,7 +6,6 @@ export type Rng = () => number;
 
 export const easeOutQuint = (t: number) => 1 - (1 - t) ** 5;
 export const easeOutCubic = (t: number) => 1 - (1 - t) ** 3;
-export const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 // Slow start, fast middle, tense finish. Steeper than smoothstep at both ends.
 export const smootherstep = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
 
@@ -156,16 +155,24 @@ export function eliminationOrder(rng: Rng, cells = ELIM_CELLS, cols = ELIM_COLS)
   return { winnerCell, rank };
 }
 
-// ── The intro bar ───────────────────────────────────────────────────────────
+// ── The scrape bar ──────────────────────────────────────────────────────────
 
 /**
- * An inchworm: the leading edge shoots ahead on an ease-out, the trailing edge
- * starts late and catches up. Returned as fractions of the track.
+ * The bar shown while a build runs, as a fraction of the track.
+ *
+ * It reports the server's real enrichment count, so it advances in bursts and
+ * stalls between them the way the work actually does. Two adjustments keep it
+ * honest rather than merely accurate: it never starts at zero, because a bar
+ * with no width reads as a bar that is not running; and it never reaches full
+ * on its own, because the request is not finished until the response lands.
  */
-export function introBar(t: number): { left: number; width: number } {
-  const lead = easeOutCubic(clamp01(t / 0.6));
-  const trail = easeInOutCubic(clamp01((t - 0.25) / 0.75));
-  return { left: trail, width: Math.max(0, lead - trail) };
+export const SCRAPE_BAR_FLOOR = 0.04;
+const SCRAPE_BAR_CEILING = 0.97;
+
+export function scrapeBar(progress: { done: number; total: number } | null): number {
+  if (!progress || progress.total <= 0) return SCRAPE_BAR_FLOOR;
+  const fraction = clamp01(progress.done / progress.total);
+  return SCRAPE_BAR_FLOOR + fraction * (SCRAPE_BAR_CEILING - SCRAPE_BAR_FLOOR);
 }
 
 // ── Formatting ──────────────────────────────────────────────────────────────

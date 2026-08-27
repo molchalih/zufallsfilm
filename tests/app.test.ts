@@ -26,7 +26,7 @@ const okBuilder = {
   async getWatchlist() {
     return { films, complete: true, partial: false };
   },
-  enrich: async (films: any[]) => films,
+  enrich: async (_user: string, films: any[]) => films,
   whenSettled: async () => {},
   inFlightCount: () => 0,
 };
@@ -107,7 +107,7 @@ test("build errors map to their documented status codes", async () => {
         async getWatchlist() {
           throw new BuildError("x", reason as any);
         },
-        enrich: async (films: any[]) => films,
+        enrich: async (_user: string, films: any[]) => films,
         whenSettled: async () => {},
         inFlightCount: () => 0,
       } as any,
@@ -163,7 +163,7 @@ test("a film carries its poster and rating, and says so when it has neither", as
           partial: false,
         };
       },
-      enrich: async (films: any[]) => films,
+      enrich: async (_user: string, films: any[]) => films,
       whenSettled: async () => {},
       inFlightCount: () => 0,
     } as any,
@@ -206,7 +206,7 @@ test("an unhandled throw becomes a 500, not a hang", async () => {
       getWatchlist() {
         throw new TypeError("boom");
       },
-      enrich: async (films: any[]) => films,
+      enrich: async (_user: string, films: any[]) => films,
       whenSettled: async () => {},
       inFlightCount() {
         throw new TypeError("boom");
@@ -237,7 +237,7 @@ test("an unfiltered pick enriches one film, not the whole watchlist", async () =
     async getWatchlist() {
       return { films: pool, complete: true, partial: false };
     },
-    async enrich(films: any[]) {
+    async enrich(_user: string, films: any[]) {
       enriched += films.length;
       return films.map((f) => ({ ...f, runtime: 90, rating: null, poster: null }));
     },
@@ -279,7 +279,7 @@ test("a watchlist page enriches its page, not the watchlist behind it", async ()
       async getWatchlist() {
         return { films: pool, complete: true, partial: false };
       },
-      async enrich(films: any[]) {
+      async enrich(_user: string, films: any[]) {
         enriched += films.length;
         return films.map((f) => ({ ...f, runtime: null, rating: null, poster: null }));
       },
@@ -296,4 +296,37 @@ test("a watchlist page enriches its page, not the watchlist behind it", async ()
   expect(body.films).toHaveLength(25);
   expect(body.films[0].lid).toBe("l50");
   expect(enriched).toBe(25);
+});
+
+test("progress is readable while a build runs and is not rate limited", async () => {
+  let at: { done: number; total: number } | null = { done: 7, total: 60 };
+  const app = createApp({
+    builder: {
+      ...okBuilder,
+      progressFor: (u: string) => (u === "u" ? at : null),
+    } as any,
+    store: openStore(":memory:"),
+    cfg,
+    // A bucket of one: the poll must not spend it, or it throttles the very
+    // request it is reporting on.
+    limiter: createLimiter({
+      ratePerMin: 60,
+      burst: 1,
+      distinctUsersPerWindow: 100,
+      windowMs: 60_000,
+    }),
+    metrics: createMetrics(),
+  });
+
+  for (let i = 0; i < 5; i++) {
+    const r = await app.request("/progress/u");
+    expect(r.status).toBe(200);
+    expect(await json(r)).toEqual({ done: 7, total: 60 });
+  }
+  // The pick still has its token.
+  expect((await app.request("/pick?user=u")).status).toBe(200);
+
+  // Nothing in flight reads as zero, not as an error.
+  at = null;
+  expect(await json(await app.request("/progress/u"))).toEqual({ done: 0, total: 0 });
 });

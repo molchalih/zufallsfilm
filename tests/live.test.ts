@@ -37,7 +37,7 @@ live(
     // Enrichment coverage was measured at 99.2%; allow a small miss margin.
     // One page, not the whole watchlist: `enrich` is scoped by its caller, and
     // a live suite that enriched thousands of films would run for minutes.
-    const page = await builder.enrich(full.films.slice(0, 28));
+    const page = await builder.enrich(USER, full.films.slice(0, 28));
     const known = page.filter((f) => f.runtime !== null).length;
     expect(known / page.length).toBeGreaterThan(0.95);
 

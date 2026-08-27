@@ -6,13 +6,21 @@ import { Roll } from "./anim/Roll";
 import { Shuffle } from "./anim/Shuffle";
 import { ANIMATIONS, type Animation, type AnimProps, animationFromSearch } from "./anim/shared";
 import { Void } from "./anim/Void";
-import { ApiError, type Film, fetchPick, fetchPool, type Pool } from "./api";
+import {
+  ApiError,
+  type Film,
+  fetchPick,
+  fetchPool,
+  fetchProgress,
+  type Pool,
+  type Progress,
+} from "./api";
 import type { Copy } from "./copy";
 import { copyFor } from "./copy";
 import { ErrorScreen } from "./screens/ErrorScreen";
 import { Idle } from "./screens/Idle";
 import { Result } from "./screens/Result";
-import { buildReel, introBar, type Reel } from "./spin";
+import { buildReel, type Reel, scrapeBar } from "./spin";
 
 /**
  * The watchlist this site draws from when nobody names one. The API has no
@@ -26,6 +34,8 @@ const HOUSE_USER = "sightsound";
 const SPIN_MS = 5000;
 /** The bar runs at least this long, so a warm answer still reads as a spin. */
 const INTRO_MS = 800;
+/** How often the build's progress is read while the bar is up. */
+const PROGRESS_POLL_MS = 200;
 /** Beat between the reel stopping and the result landing. */
 const HOLD_MS = 450;
 
@@ -74,13 +84,14 @@ export function App() {
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [spin, setSpin] = useState<Spin | null>(null);
   const [t, setT] = useState(0);
-  const [introT, setIntroT] = useState(0);
+  const [progress, setProgress] = useState<Progress | null>(null);
 
   // Everything a spin owns is torn down by bumping this: a late response, a
   // running frame loop and a pending hold all check it before touching state.
   const runRef = useRef(0);
   const rafRef = useRef(0);
   const holdRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   // Cached so a reroll costs one request instead of two.
   const poolRef = useRef<{ user: string; pool: Pool } | null>(null);
 
@@ -88,6 +99,7 @@ export function App() {
     runRef.current += 1;
     cancelAnimationFrame(rafRef.current);
     clearTimeout(holdRef.current);
+    clearInterval(pollRef.current);
   }, []);
 
   useEffect(() => stop, [stop]);
@@ -96,7 +108,7 @@ export function App() {
     stop();
     setSpin(null);
     setT(0);
-    setIntroT(0);
+    setProgress(null);
     setPhase({ kind: "idle" });
   }, [stop]);
 
@@ -113,16 +125,18 @@ export function App() {
 
       setPhase({ kind: "loading" });
       setT(0);
+      setProgress(null);
 
-      // The bar loops while the request is out. It is the only honest progress
-      // signal available: a cold build's duration is not knowable up front.
+      // The bar reports the server's own enrichment count rather than a timer,
+      // so it stalls and jumps the way the work does. A warm build finishes
+      // before the first poll lands, which is why the bar also has a floor.
       const introStart = performance.now();
-      const loopIntro = (now: number) => {
+      pollRef.current = setInterval(() => {
         if (!alive()) return;
-        setIntroT(((now - introStart) % INTRO_MS) / INTRO_MS);
-        rafRef.current = requestAnimationFrame(loopIntro);
-      };
-      rafRef.current = requestAnimationFrame(loopIntro);
+        fetchProgress(user).then((p) => {
+          if (alive() && p && p.total > 0) setProgress(p);
+        });
+      }, PROGRESS_POLL_MS);
 
       const cached = poolRef.current;
       // A partial pool is page one of a build still in flight; re-read it so a
@@ -159,7 +173,7 @@ export function App() {
           await new Promise((r) => setTimeout(r, remainder));
           if (!alive()) return;
 
-          cancelAnimationFrame(rafRef.current);
+          clearInterval(pollRef.current);
           setSpin(next);
           setT(0);
           setPhase({ kind: "spinning" });
@@ -184,7 +198,7 @@ export function App() {
         })
         .catch((e: unknown) => {
           if (!alive()) return;
-          cancelAnimationFrame(rafRef.current);
+          clearInterval(pollRef.current);
           setPhase({
             kind: "error",
             copy: e instanceof ApiError ? e.copy : copyFor(500),
@@ -207,11 +221,10 @@ export function App() {
 
   const bar = useMemo(() => {
     if (phase.kind === "loading") {
-      const { left, width } = introBar(introT);
-      return { marginLeft: `${left * 100}%`, width: `${width * 100}%` };
+      return { width: `${scrapeBar(progress) * 100}%`, transition: "width 220ms linear" };
     }
-    return { marginLeft: "0%", width: phase.kind === "spinning" ? `${t * 100}%` : "0%" };
-  }, [phase.kind, introT, t]);
+    return { width: phase.kind === "spinning" ? `${t * 100}%` : "0%" };
+  }, [phase.kind, progress, t]);
 
   const busy = phase.kind === "loading" || phase.kind === "spinning";
   // Loading holds whatever was already on stage — the design keeps the idle

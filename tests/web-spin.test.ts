@@ -6,7 +6,6 @@ import {
   ELIM_CELLS,
   ELIM_COLS,
   ELIM_ROWS,
-  easeInOutCubic,
   easeOutCubic,
   easeOutQuint,
   eliminationOrder,
@@ -15,9 +14,10 @@ import {
   formatYear,
   frameAt,
   interiorCell,
-  introBar,
   mulberry32,
   padIndex,
+  SCRAPE_BAR_FLOOR,
+  scrapeBar,
   smootherstep,
 } from "../src/web/spin";
 
@@ -36,7 +36,7 @@ const pool = Array.from({ length: 12 }, (_, i) => film(i));
 const winner = film(99);
 
 test("every easing spans exactly zero to one", () => {
-  for (const e of [easeOutQuint, easeOutCubic, easeInOutCubic, smootherstep]) {
+  for (const e of [easeOutQuint, easeOutCubic, smootherstep]) {
     expect(e(0)).toBeCloseTo(0, 10);
     expect(e(1)).toBeCloseTo(1, 10);
     expect(e(0.5)).toBeGreaterThan(0);
@@ -148,16 +148,26 @@ test("the elimination field is reproducible from its seed", () => {
   expect(eliminationOrder(mulberry32(5))).toEqual(eliminationOrder(mulberry32(5)));
 });
 
-test("the intro bar is a segment that starts and ends empty", () => {
-  expect(introBar(0)).toEqual({ left: 0, width: 0 });
-  const end = introBar(1);
-  expect(end.left).toBeCloseTo(1, 6);
-  expect(end.width).toBeCloseTo(0, 6);
-  for (let i = 1; i < 20; i++) {
-    const { left, width } = introBar(i / 20);
-    expect(width).toBeGreaterThanOrEqual(0);
-    expect(left + width).toBeLessThanOrEqual(1.000001);
+test("the scrape bar never starts empty and never claims to be finished", () => {
+  // A zero-width bar reads as a bar that is not running; a full one reads as
+  // work that is done, and the response has not landed yet.
+  expect(scrapeBar(null)).toBe(SCRAPE_BAR_FLOOR);
+  expect(scrapeBar({ done: 0, total: 0 })).toBe(SCRAPE_BAR_FLOOR);
+  expect(scrapeBar({ done: 0, total: 60 })).toBe(SCRAPE_BAR_FLOOR);
+  expect(scrapeBar({ done: 60, total: 60 })).toBeLessThan(1);
+  expect(scrapeBar({ done: 60, total: 60 })).toBeGreaterThan(0.9);
+});
+
+test("the scrape bar rises monotonically with the work done", () => {
+  let prev = -1;
+  for (let done = 0; done <= 60; done++) {
+    const w = scrapeBar({ done, total: 60 });
+    expect(w).toBeGreaterThanOrEqual(prev);
+    expect(w).toBeLessThanOrEqual(1);
+    prev = w;
   }
+  // A count past its total cannot push the bar off the end of the track.
+  expect(scrapeBar({ done: 999, total: 60 })).toBe(scrapeBar({ done: 60, total: 60 }));
 });
 
 test("unknown facts read as unknown, not as zero", () => {

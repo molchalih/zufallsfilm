@@ -91,7 +91,7 @@ test("stale metadata is served immediately and refreshed out of band", async () 
   // Seed a row that is inside the 30-day film TTL but past the 7-day meta window.
   store.putFilm({ lid: "a", runtime: 90, rating: 1, poster: "old.jpg" }, 20 * 24 * 60 * 60 * 1000);
 
-  const r = await b.enrich((await b.getWatchlist("u")).films);
+  const r = await b.enrich("u", (await b.getWatchlist("u")).films);
   // The cached runtime is served, not the refreshed one: staleness never gates a pick.
   expect(r[0].runtime).toBe(90);
   expect(enrichCalls).toBe(1);
