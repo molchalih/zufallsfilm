@@ -86,11 +86,20 @@ dot-segments serves a page whose script never arrives.
 | Module | Responsibility | Depends on |
 |---|---|---|
 | `api` | The two calls, and mapping a failure to its words. The only fetch | `copy` |
+| `posters` | Starts every poster's download the moment the film list arrives | Nothing |
 | `copy` | Every user-visible failure string, keyed by API `reason` | Nothing |
 | `errorPage` | The static error document, rendered by the **server** | `copy` |
 | `spin` | Easing, reel construction, the elimination field, seeded randomness. Pure | Nothing |
 | `anim/*` | One pure frame function per animation, plus the component that draws it | `spin` |
 | `App` | The state machine: idle, loading, spinning, result, error | all of the above |
+
+`posters` exists because a poster reached through a CSS background is only
+requested when a frame that shows it renders. Measured on the shuffle
+animation: 34 posters starting 50 ms apart, one per reel frame, the winner's
+last of all. Requesting them when the film list lands moves every one of them
+ahead of the frame that needs it — measured at 150 ms latency and 1 Mbps, the
+winner's poster finished 0.8 s before the reveal without it and 5.5 s before
+with it.
 
 `copy` is imported by both `src/app.ts` and the browser bundle. The same
 failure has to read the same way whether it is rendered by the server for a

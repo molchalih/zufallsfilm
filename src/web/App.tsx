@@ -17,6 +17,7 @@ import {
 } from "./api";
 import type { Copy } from "./copy";
 import { copyFor, isInputRejection } from "./copy";
+import { prefetchPosters } from "./posters";
 import { ErrorScreen } from "./screens/ErrorScreen";
 import { Idle } from "./screens/Idle";
 import { Result } from "./screens/Result";
@@ -165,6 +166,11 @@ export function App() {
           // where the work was already cached and nothing was ever counted.
           setSettled(true);
           poolRef.current = { user, pool };
+
+          // The films are known: start every poster now rather than letting
+          // each frame trigger its own. The winner leads — it is the one image
+          // the visitor is guaranteed to look at, and it is referenced last.
+          prefetchPosters([pickRes.film.poster, ...pool.films.map((f) => f.poster)]);
 
           const anim =
             animationFromSearch(location.search) ??
