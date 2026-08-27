@@ -36,7 +36,7 @@ export function loadConfig(env: Env): Config {
     requestTimeoutMs: num(env, "REQUEST_TIMEOUT_MS", 20_000),
     buildBudgetMs: num(env, "BUILD_BUDGET_MS", 300_000),
     filmTtlMs: num(env, "FILM_TTL_MS", 30 * 24 * 60 * 60 * 1000),
-    scrapeTtlMs: num(env, "SCRAPE_TTL_MS", 24 * 60 * 60 * 1000),
+    scrapeTtlMs: num(env, "SCRAPE_TTL_MS", 7 * 24 * 60 * 60 * 1000),
     negativeTtlMs: num(env, "NEGATIVE_TTL_MS", 60 * 60 * 1000),
   });
 }

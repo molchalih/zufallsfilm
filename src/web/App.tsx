@@ -61,8 +61,6 @@ type Spin = {
   pool: Film[];
   /** Films the watchlist holds, for the position readouts during a spin. */
   total: number;
-  /** Films the server actually drew from. Its own count, not the pool's. */
-  drawnFrom: number;
   /** The winner's own place in the watchlist, which the pool may not contain. */
   winnerPosition: number;
 };
@@ -152,7 +150,6 @@ export function App() {
             // The pick's own count, not the pool's: a backfill that lands
             // between the two requests would make them disagree, and only one
             // of them describes the draw that actually happened.
-            drawnFrom: pickRes.pool,
             winnerPosition: pickRes.position,
           };
 
@@ -266,7 +263,6 @@ export function App() {
         {showResult && spin && (
           <Result
             film={spin.reel.winner}
-            poolSize={spin.drawnFrom}
             busy={busy}
             onReroll={() => start(poolRef.current?.user ?? username)}
           />

@@ -242,9 +242,7 @@ input:focus {
   /* Vertical padding matters only once the button wraps onto its own row,
      where it no longer stretches to the input's height. */
   padding: 14px 28px;
-  /* Grows to fill the row it wraps onto, rather than sitting stranded and
-     centred under a full-width input. */
-  flex: 1 0 150px;
+  min-width: 150px;
 }
 
 .button-reroll {
@@ -274,6 +272,16 @@ input:focus {
 .link-quiet:disabled {
   cursor: default;
   opacity: 0.5;
+}
+
+/* Below this the field wraps and the button lands on a row of its own, where it
+   should span the width rather than sit stranded and centred under the input.
+   Above it the button sizes to its label and the input takes the slack, which
+   is the proportion the design draws. */
+@media (max-width: 520px) {
+  .button-primary {
+    flex: 1 0 100%;
+  }
 }
 
 /* ── Result ──────────────────────────────────────────────────────────────── */
@@ -388,12 +396,6 @@ input:focus {
 .fact-value {
   font-size: 16px;
   font-weight: 700;
-}
-
-.note {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--muted);
 }
 
 /* ── Roll ────────────────────────────────────────────────────────────────── */

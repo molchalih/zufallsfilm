@@ -226,7 +226,7 @@ own unexpired window and remain pickable.
 
 | Table | Key | TTL | Rationale |
 |---|---|---|---|
-| `scrape` | `username` | 24 h | Owns `scraped_at`, `expected_count`, `actual_count`, `complete` |
+| `scrape` | `username` | 7 d | Owns `scraped_at`, `expected_count`, `actual_count`, `complete`. A watchlist is a slow-moving list, and a re-scrape is `ceil(N/28)` upstream requests from a single address; a day was paying that cost far more often than the data changed. The cost of the longer window is that a film removed from a watchlist stays pickable until the scrape expires |
 | `watchlist_entry` | `(username, lid)` | none — lifetime bound to its scrape | Written only by an atomic replace |
 | `film` | `lid` | 30 d | Shared across users. Not immutable: runtimes are community-editable and unreleased films carry `null` |
 | `film` negative result | `lid` | 1 h | A miss is not a fact. Keyed by `last_attempt_at` |

@@ -20,13 +20,11 @@ function Arrow() {
 
 export type ResultProps = {
   film: Film;
-  /** Films the draw was made from. */
-  poolSize: number;
   onReroll: () => void;
   busy: boolean;
 };
 
-export function Result({ film, poolSize, onReroll, busy }: ResultProps) {
+export function Result({ film, onReroll, busy }: ResultProps) {
   return (
     <div className="result">
       {film.poster ? (
@@ -67,7 +65,6 @@ export function Result({ film, poolSize, onReroll, busy }: ResultProps) {
             </div>
           </div>
         </div>
-        <span className="note">drawn from {poolSize} films</span>
         <button type="button" className="button button-reroll" onClick={onReroll} disabled={busy}>
           reroll ↺
         </button>
