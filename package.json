@@ -4,8 +4,8 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "lint": "biome check src tests",
-    "format": "biome check --write src tests",
+    "lint": "biome check",
+    "format": "biome check --write",
     "test": "bun test",
     "check": "bun run typecheck && bun run lint && bun test && bun run style",
     "style": "scripts/check-style.sh"
