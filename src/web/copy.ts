@@ -59,3 +59,21 @@ export function copyFor(status: number, reason?: string): Copy {
 
 // A network failure has no status at all: fetch rejected before a response.
 export const OFFLINE: Copy = { code: "———", headline: "no signal." };
+
+/**
+ * Reasons that are a verdict on what the visitor typed rather than a failure of
+ * the service. These belong on the field they came from: sending someone to a
+ * full error page to be told they mistyped a username loses the username, the
+ * page, and the thread of what they were doing.
+ */
+const INPUT_REJECTIONS = new Set([
+  "missing_user",
+  "user_not_found",
+  "watchlist_empty",
+  "watchlist_private",
+  "watchlist_too_large",
+]);
+
+export function isInputRejection(reason: string | undefined): boolean {
+  return reason !== undefined && INPUT_REJECTIONS.has(reason);
+}

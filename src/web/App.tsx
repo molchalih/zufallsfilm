@@ -16,7 +16,7 @@ import {
   type Progress,
 } from "./api";
 import type { Copy } from "./copy";
-import { copyFor } from "./copy";
+import { copyFor, isInputRejection } from "./copy";
 import { ErrorScreen } from "./screens/ErrorScreen";
 import { Idle } from "./screens/Idle";
 import { Result } from "./screens/Result";
@@ -85,6 +85,9 @@ export function App() {
   const [spin, setSpin] = useState<Spin | null>(null);
   const [t, setT] = useState(0);
   const [progress, setProgress] = useState<Progress | null>(null);
+  // A verdict on the name in the field, shown on the field rather than by
+  // replacing the page the visitor is standing on.
+  const [rejection, setRejection] = useState<Copy | null>(null);
 
   // Everything a spin owns is torn down by bumping this: a late response, a
   // running frame loop and a pending hold all check it before touching state.
@@ -109,14 +112,16 @@ export function App() {
     setSpin(null);
     setT(0);
     setProgress(null);
+    setRejection(null);
     setPhase({ kind: "idle" });
   }, [stop]);
 
   const start = useCallback(
     (rawUser: string) => {
       const user = rawUser.trim().toLowerCase();
+      setRejection(null);
       if (!user) {
-        setPhase({ kind: "error", copy: copyFor(400, "missing_user") });
+        setRejection(copyFor(400, "missing_user"));
         return;
       }
       stop();
@@ -199,6 +204,13 @@ export function App() {
         .catch((e: unknown) => {
           if (!alive()) return;
           clearInterval(pollRef.current);
+          // A name the service cannot use is not a broken service. Keep the
+          // visitor where they are, with what they typed still in the field.
+          if (e instanceof ApiError && isInputRejection(e.reason)) {
+            setRejection(e.copy);
+            setPhase({ kind: "idle" });
+            return;
+          }
           setPhase({
             kind: "error",
             copy: e instanceof ApiError ? e.copy : copyFor(500),
@@ -252,7 +264,11 @@ export function App() {
         {showIdle && (
           <Idle
             username={username}
-            onUsername={setUsername}
+            onUsername={(value) => {
+              setRejection(null);
+              setUsername(value);
+            }}
+            rejection={rejection}
             onSubmit={() => start(username)}
             onSurprise={() => start(HOUSE_USER)}
             busy={busy}

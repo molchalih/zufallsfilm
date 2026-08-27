@@ -227,6 +227,14 @@ in the module that raises it.
 | `upstream_timeout` | 504 | Egress or total-build timeout |
 | `building` | 202 | Only when page 1 itself is not yet available |
 
+A reason is a verdict on the request or a failure of the service, and the
+interface treats the two differently. `missing_user`, `user_not_found`,
+`watchlist_empty`, `watchlist_private` and `watchlist_too_large` are verdicts on
+the name that was typed: they mark the field and leave the visitor on it, with
+what they typed intact. Everything else replaces the page, because there is
+nothing to retype that would change the outcome. `src/web/copy.ts` owns that
+split alongside the words.
+
 Every reason above has a row in `src/web/copy.ts` giving it a headline, and
 `tests/web-copy.test.ts` reads this table to enforce that. Every **status**
 above has one too, because a proxy in front of this service answers with its

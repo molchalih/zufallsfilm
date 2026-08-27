@@ -26,11 +26,14 @@ export type Pool = { films: Film[]; count: number; complete: boolean; partial: b
 // and resolving them once here keeps the mapping off the render path.
 export class ApiError extends Error {
   readonly copy: Copy;
+  /** The API's machine-readable reason, where the response carried one. */
+  readonly reason: string | undefined;
 
-  constructor(copy: Copy) {
+  constructor(copy: Copy, reason?: string) {
     super(`${copy.code} ${copy.headline}`);
     this.name = "ApiError";
     this.copy = copy;
+    this.reason = reason;
   }
 }
 
@@ -49,8 +52,9 @@ async function getJson(url: string): Promise<unknown> {
     throw new ApiError(copyFor(res.ok ? 502 : res.status));
   }
   if (!res.ok) {
-    const reason = (body as { reason?: unknown } | null)?.reason;
-    throw new ApiError(copyFor(res.status, typeof reason === "string" ? reason : undefined));
+    const raw = (body as { reason?: unknown } | null)?.reason;
+    const reason = typeof raw === "string" ? raw : undefined;
+    throw new ApiError(copyFor(res.status, reason), reason);
   }
   return body;
 }

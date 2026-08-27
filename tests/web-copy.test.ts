@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { copyFor, OFFLINE } from "../src/web/copy";
+import { copyFor, isInputRejection, OFFLINE } from "../src/web/copy";
 import { errorPage } from "../src/web/errorPage";
 
 test("a known reason wins over its status", () => {
@@ -67,4 +67,62 @@ test("the error document escapes what it interpolates", () => {
   // No caller passes markup today; the escape is what keeps that true.
   const html = errorPage(404, '"><script>alert(1)</script>');
   expect(html).not.toContain("<script>alert(1)</script>");
+});
+
+test("a verdict on the typed name is separated from a failure of the service", () => {
+  // The first group stays on the field. The second replaces the page, because
+  // there is nothing the visitor can retype to fix it.
+  for (const reason of [
+    "missing_user",
+    "user_not_found",
+    "watchlist_empty",
+    "watchlist_private",
+    "watchlist_too_large",
+  ]) {
+    expect(`${reason}:${isInputRejection(reason)}`).toBe(`${reason}:true`);
+  }
+  for (const reason of [
+    "upstream_blocked",
+    "upstream_timeout",
+    "incomplete",
+    "internal",
+    "route_not_found",
+    "throttled_rate",
+    "throttled_variety",
+    "no_match",
+    "bad_max_runtime",
+  ]) {
+    expect(`${reason}:${isInputRejection(reason)}`).toBe(`${reason}:false`);
+  }
+  expect(isInputRejection(undefined)).toBe(false);
+  // A bare object's inherited keys must not read as a rejection.
+  expect(isInputRejection("constructor")).toBe(false);
+  expect(isInputRejection("toString")).toBe(false);
+});
+
+test("every inline reason still has words, for the assistive path", () => {
+  // The field shows colour only; the reason has to remain resolvable.
+  for (const reason of ["missing_user", "user_not_found", "watchlist_private"]) {
+    expect(copyFor(404, reason).headline).not.toBe("something broke.");
+  }
+});
+
+test("every inline reason has words worth putting under the field", () => {
+  // The field takes the accent, but the accent is also the button's colour, so
+  // colour alone reads as styling. These are the words that make it a verdict.
+  const inline = [
+    "missing_user",
+    "user_not_found",
+    "watchlist_empty",
+    "watchlist_private",
+    "watchlist_too_large",
+  ];
+  const said = inline.map((r) => copyFor(404, r).headline);
+  for (const line of said) {
+    expect(line).not.toBe("something broke.");
+    expect(line).not.toBe("scene missing.");
+  }
+  // Each says something different, or the line tells the visitor nothing the
+  // red field had not already told them.
+  expect(new Set(said).size).toBe(inline.length);
 });

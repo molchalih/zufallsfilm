@@ -222,6 +222,18 @@ input:focus {
   color: var(--muted);
 }
 
+/* The whole field takes the accent, rather than a message being added beside
+   it: the design has no slot for one, and the field is what the verdict is
+   about. It clears on the next keystroke. */
+.field-rejected .field-at {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.field-rejected .field-input {
+  border-color: var(--accent);
+}
+
 .button {
   border: none;
   background: var(--accent);
@@ -272,6 +284,18 @@ input:focus {
 .link-quiet:disabled {
   cursor: default;
   opacity: 0.5;
+}
+
+/* Occupies the quiet link's slot exactly — same size, same offset — so a
+   refused name changes what the line says and never where anything sits. Set
+   in ink rather than the accent: the accent is this design's colour for the
+   button and the wordmark, and a red field beside a red button reads as
+   styling. The words are what make it an error. */
+.rejection {
+  margin: -12px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
 }
 
 /* Below this the field wraps and the button lands on a row of its own, where it
