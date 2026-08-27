@@ -26,6 +26,7 @@ const okBuilder = {
   async getWatchlist() {
     return { films, complete: true, partial: false };
   },
+  enrich: async (films: any[]) => films,
   whenSettled: async () => {},
   inFlightCount: () => 0,
 };
@@ -106,6 +107,7 @@ test("build errors map to their documented status codes", async () => {
         async getWatchlist() {
           throw new BuildError("x", reason as any);
         },
+        enrich: async (films: any[]) => films,
         whenSettled: async () => {},
         inFlightCount: () => 0,
       } as any,
@@ -149,4 +151,76 @@ test("watchlist responses are paginated", async () => {
   expect(body.count).toBe(2);
   expect(body.films).toHaveLength(1);
   expect(body.films[0].lid).toBe("b");
+});
+
+test("an unfiltered pick enriches one film, not the whole watchlist", async () => {
+  // Enriching a 1200-film watchlist to answer a request that returns one film
+  // takes longer than any proxy will hold the connection open.
+  const pool = Array.from({ length: 500 }, (_, i) => ({
+    lid: `l${i}`,
+    slug: `s${i}`,
+    name: `F${i}`,
+    year: 2000,
+  }));
+  let enriched = 0;
+  const builder = {
+    async getWatchlist() {
+      return { films: pool, complete: true, partial: false };
+    },
+    async enrich(films: any[]) {
+      enriched += films.length;
+      return films.map((f) => ({ ...f, runtime: 90, rating: null, poster: null }));
+    },
+    whenSettled: async () => {},
+    inFlightCount: () => 0,
+  };
+  const app = createApp({
+    builder: builder as any,
+    store: openStore(":memory:"),
+    cfg,
+    limiter: limiter(),
+    metrics: createMetrics(),
+  });
+
+  const r = await json(await app.request("/pick?user=u"));
+  expect(r.pool).toBe(500);
+  expect(r.film.runtime).toBe(90);
+  expect(enriched).toBe(1);
+
+  // A runtime filter has to know every runtime, so it still pays for them.
+  enriched = 0;
+  expect((await app.request("/pick?user=u&maxRuntime=120")).status).toBe(200);
+  expect(enriched).toBe(pool.length + 1);
+});
+
+test("a watchlist page enriches its page, not the watchlist behind it", async () => {
+  const pool = Array.from({ length: 500 }, (_, i) => ({
+    lid: `l${i}`,
+    slug: `s${i}`,
+    name: `F${i}`,
+    year: 2000,
+  }));
+  let enriched = 0;
+  const app = createApp({
+    builder: {
+      async getWatchlist() {
+        return { films: pool, complete: true, partial: false };
+      },
+      async enrich(films: any[]) {
+        enriched += films.length;
+        return films.map((f) => ({ ...f, runtime: null, rating: null, poster: null }));
+      },
+      whenSettled: async () => {},
+      inFlightCount: () => 0,
+    } as any,
+    store: openStore(":memory:"),
+    cfg,
+    limiter: limiter(),
+    metrics: createMetrics(),
+  });
+  const body = await json(await app.request("/watchlist/u?perPage=25&page=3"));
+  expect(body.count).toBe(500);
+  expect(body.films).toHaveLength(25);
+  expect(body.films[0].lid).toBe("l50");
+  expect(enriched).toBe(25);
 });

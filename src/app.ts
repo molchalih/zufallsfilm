@@ -92,9 +92,18 @@ export function createApp(deps: {
 
     try {
       const { films, partial } = await builder.getWatchlist(user);
-      const chosen = pick(films, { maxRuntime });
+      // A runtime filter has to know every runtime, so it pays for all of them.
+      // An unfiltered pick does not: draw first, then enrich the one film the
+      // response carries. On a 1200-film watchlist that is one upstream call
+      // instead of 1200.
+      const pool =
+        maxRuntime === undefined
+          ? films.map((f) => ({ ...f, runtime: null }))
+          : await builder.enrich(films);
+      const chosen = pick(pool, { maxRuntime });
       if (!chosen) return c.json({ error: true, reason: "no_match" }, 404);
-      return c.json({ film: shape(chosen), partial, pool: films.length });
+      const [film] = await builder.enrich([chosen]);
+      return c.json({ film: shape({ ...chosen, ...film }), partial, pool: films.length });
     } catch (e) {
       if (e instanceof BuildError) {
         return c.json({ error: true, reason: e.reason }, STATUS[e.reason] ?? 502);
@@ -113,13 +122,15 @@ export function createApp(deps: {
     try {
       const { films, complete, partial } = await builder.getWatchlist(user);
       const start = (page - 1) * perPage;
+      // Enrich the page, not the watchlist behind it.
+      const window = await builder.enrich(films.slice(start, start + perPage));
       return c.json({
         count: films.length,
         complete,
         partial,
         page,
         perPage,
-        films: films.slice(start, start + perPage).map(shape),
+        films: window.map(shape),
       });
     } catch (e) {
       if (e instanceof BuildError) {

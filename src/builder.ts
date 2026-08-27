@@ -140,7 +140,15 @@ export function createBuilder(deps: {
     }
   }
 
-  async function runtimesFor(films: Film[]) {
+  /**
+   * Fills in runtime, rating and poster for exactly the films handed to it.
+   *
+   * Enrichment is the expensive half of a build — DESIGN.md measures 69 ms per
+   * uncached film — so the caller decides its scope. Enriching a whole
+   * watchlist to answer a request that returns one page of it costs 80 s on a
+   * 1200-film watchlist, which no proxy will hold open.
+   */
+  async function enrich(films: Film[]) {
     const metas = await mapLimit(films, ENRICH_CONCURRENCY, async (f) => {
       const cached = store.getFilm(f.lid, now(), cfg.filmTtlMs, cfg.negativeTtlMs);
       if (cached && !cached.metaStale) return cached;
@@ -165,7 +173,15 @@ export function createBuilder(deps: {
       }
     });
     const byLid = new Map(metas.map((m) => [m.lid, m]));
-    return films.map((f) => ({ ...f, runtime: byLid.get(f.lid)?.runtime ?? null }));
+    return films.map((f) => {
+      const m = byLid.get(f.lid);
+      return {
+        ...f,
+        runtime: m?.runtime ?? null,
+        rating: m?.rating ?? null,
+        poster: m?.poster ?? null,
+      };
+    });
   }
 
   function startBackfill(username: string, seed: Seed) {
@@ -178,6 +194,8 @@ export function createBuilder(deps: {
   }
 
   return {
+    enrich,
+
     inFlightCount: () => inFlight.size + backfills.size,
 
     whenSettled(rawUsername: string): Promise<void> {
@@ -185,15 +203,16 @@ export function createBuilder(deps: {
       return backfills.get(username) ?? Promise.resolve();
     },
 
+    /**
+     * The watchlist itself. Films carry identity only; runtimes, ratings and
+     * posters come from `enrich`, which the caller applies to the subset it
+     * actually needs.
+     */
     async getWatchlist(rawUsername: string) {
       const username = rawUsername.trim().toLowerCase();
       const sc = store.getScrape(username);
       if (sc?.complete && now() - sc.scrapedAt < cfg.scrapeTtlMs) {
-        return {
-          films: await runtimesFor(store.getWatchlist(username)),
-          complete: true,
-          partial: false,
-        };
+        return { films: store.getWatchlist(username), complete: true, partial: false };
       }
       let p = inFlight.get(username);
       if (!p) {
@@ -212,7 +231,7 @@ export function createBuilder(deps: {
         inFlight.set(username, p);
       }
       const { films, complete } = await p;
-      return { films: await runtimesFor(films), complete, partial: !complete };
+      return { films, complete, partial: !complete };
     },
   };
 }
