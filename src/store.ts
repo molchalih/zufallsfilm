@@ -22,6 +22,7 @@ type FilmRecord = {
   runtime: number | null;
   rating: number | null;
   poster: string | null;
+  director: string | null;
   fetched_at: number;
 };
 
@@ -56,7 +57,21 @@ CREATE INDEX IF NOT EXISTS idx_film_fetched ON film(fetched_at);
 // Ordered, append-only. `CREATE TABLE IF NOT EXISTS` alone silently skips
 // schema changes on a database that already exists, so every change goes here
 // as a new entry and the file's version is the index of the last one applied.
-const MIGRATIONS: string[] = [SCHEMA];
+const STALE_META_MS = 7 * 24 * 60 * 60 * 1000;
+
+const MIGRATIONS: string[] = [
+  SCHEMA,
+  // Never folded back into SCHEMA: a fresh database runs every entry in order,
+  // so a column declared in both places fails the ALTER on first open.
+  `ALTER TABLE film ADD COLUMN director TEXT;`,
+  // Every row that predates the column has a null director and, being inside
+  // its 30-day TTL, nothing would refetch it for weeks. Backdating to the
+  // staleness boundary hands them to the background refresh that already
+  // exists for posters and ratings: the cached row is still served, so no pick
+  // waits on this, and the director arrives on the next read.
+  `UPDATE film SET fetched_at = MIN(fetched_at, unixepoch() * 1000 - ${STALE_META_MS})
+   WHERE director IS NULL;`,
+];
 
 function migrate(db: Database) {
   const { user_version: at } = db.query("PRAGMA user_version").get() as {
@@ -140,7 +155,7 @@ export function openStore(path: string) {
       now: number,
       filmTtlMs: number,
       negativeTtlMs: number,
-      staleMetaMs = 7 * 24 * 60 * 60 * 1000,
+      staleMetaMs = STALE_META_MS,
     ): (FilmMeta & { metaStale: boolean }) | null {
       const r = db.query(`SELECT * FROM film WHERE lid = ?`).get(lid) as FilmRecord | null;
       if (!r) return null;
@@ -154,18 +169,20 @@ export function openStore(path: string) {
         runtime: r.runtime,
         rating: r.rating,
         poster: r.poster,
+        director: r.director,
         metaStale: now - r.fetched_at >= staleMetaMs,
       };
     },
 
     putFilm(meta: FilmMeta, now: number) {
       db.prepare(
-        `INSERT INTO film (lid, runtime, rating, poster, fetched_at)
-         VALUES (?, ?, ?, ?, ?)
+        `INSERT INTO film (lid, runtime, rating, poster, director, fetched_at)
+         VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(lid) DO UPDATE SET
            runtime = excluded.runtime, rating = excluded.rating,
-           poster = excluded.poster, fetched_at = excluded.fetched_at`,
-      ).run(meta.lid, meta.runtime, meta.rating, meta.poster, now);
+           poster = excluded.poster, director = excluded.director,
+           fetched_at = excluded.fetched_at`,
+      ).run(meta.lid, meta.runtime, meta.rating, meta.poster, meta.director, now);
     },
 
     evictFilms(cap: number): number {

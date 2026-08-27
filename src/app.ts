@@ -30,6 +30,7 @@ type Shaped = {
   runtime: number | null;
   rating?: number | null;
   poster?: string | null;
+  director?: string | null;
 };
 
 // The shape DESIGN.md § API contract specifies. `rating` and `poster` are
@@ -43,6 +44,7 @@ const shape = (f: Shaped) => ({
   runtime: f.runtime,
   rating: f.rating ?? null,
   poster: f.poster ?? null,
+  director: f.director ?? null,
   url: `https://letterboxd.com/film/${f.slug}/`,
 });
 

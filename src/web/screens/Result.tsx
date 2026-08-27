@@ -1,5 +1,5 @@
 import type { Film } from "../api";
-import { formatRating, formatRuntime, formatYear } from "../spin";
+import { formatRuntime, formatYear } from "../spin";
 
 function Arrow() {
   return (
@@ -55,12 +55,12 @@ export function Result({ film, onReroll, busy }: ResultProps) {
                 <span className="fact-value">{formatYear(film.year)}</span>
               </div>
               <div className="fact">
-                <span className="fact-label">runtime</span>
-                <span className="fact-value">{formatRuntime(film.runtime)}</span>
+                <span className="fact-label">director</span>
+                <span className="fact-value">{film.director ?? "—"}</span>
               </div>
               <div className="fact">
-                <span className="fact-label">rating</span>
-                <span className="fact-value">{formatRating(film.rating)}</span>
+                <span className="fact-label">runtime</span>
+                <span className="fact-value">{formatRuntime(film.runtime)}</span>
               </div>
             </div>
           </div>

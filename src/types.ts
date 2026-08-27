@@ -10,6 +10,8 @@ export type FilmMeta = {
   runtime: number | null;
   rating: number | null;
   poster: string | null;
+  /** Joined with ", " when a film has more than one. */
+  director: string | null;
 };
 
 export type PickFilter = {

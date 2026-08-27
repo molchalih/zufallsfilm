@@ -6,7 +6,7 @@ import { openStore } from "../src/store";
 const cfg = loadConfig({});
 const enricher = {
   async enrich(f: any) {
-    return { lid: f.lid, runtime: 90, rating: null, poster: null };
+    return { lid: f.lid, runtime: 90, rating: null, poster: null, director: null };
   },
 };
 
@@ -80,7 +80,7 @@ test("stale metadata is served immediately and refreshed out of band", async () 
     enricher: {
       async enrich(f: any) {
         enrichCalls++;
-        return { lid: f.lid, runtime: 120, rating: 4.5, poster: "fresh.jpg" };
+        return { lid: f.lid, runtime: 120, rating: 4.5, poster: "fresh.jpg", director: null };
       },
     } as any,
     store,
@@ -89,7 +89,10 @@ test("stale metadata is served immediately and refreshed out of band", async () 
   });
 
   // Seed a row that is inside the 30-day film TTL but past the 7-day meta window.
-  store.putFilm({ lid: "a", runtime: 90, rating: 1, poster: "old.jpg" }, 20 * 24 * 60 * 60 * 1000);
+  store.putFilm(
+    { lid: "a", runtime: 90, rating: 1, poster: "old.jpg", director: null },
+    20 * 24 * 60 * 60 * 1000,
+  );
 
   const r = await b.enrich("u", (await b.getWatchlist("u")).films);
   // The cached runtime is served, not the refreshed one: staleness never gates a pick.

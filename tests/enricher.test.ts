@@ -93,3 +93,73 @@ test("an upstream error propagates and is never recorded as a miss", async () =>
   };
   await expect(createEnricher(f as any).enrich(film)).rejects.toThrow("upstream exploded");
 });
+
+test("a director comes from the search result, which already carries one", async () => {
+  // Measured 2026-08-27: 25 of 25 films searched carry a `directors` array, so
+  // this needs no extra request and no film-page fallback.
+  const meta = await createEnricher({
+    async get() {
+      return {
+        body: JSON.stringify({
+          items: [
+            {
+              film: {
+                id: "x1",
+                runTime: 99,
+                rating: 4.3,
+                directors: [{ id: "d1", name: "Wong Kar-Wai" }],
+              },
+            },
+          ],
+        }),
+      } as any;
+    },
+  } as any).enrich({ lid: "x1", slug: "s", name: "n", year: 2000 });
+  expect(meta.director).toBe("Wong Kar-Wai");
+});
+
+test("co-directed films name everyone", async () => {
+  const meta = await createEnricher({
+    async get() {
+      return {
+        body: JSON.stringify({
+          items: [
+            {
+              film: {
+                id: "x1",
+                runTime: 139,
+                directors: [{ name: "Daniel Scheinert" }, { name: "Daniel Kwan" }],
+              },
+            },
+          ],
+        }),
+      } as any;
+    },
+  } as any).enrich({ lid: "x1", slug: "s", name: "n", year: 2022 });
+  expect(meta.director).toBe("Daniel Scheinert, Daniel Kwan");
+});
+
+test("the film-page fallback reads a director too, in either JSON-LD shape", async () => {
+  const page = (director: string) =>
+    `<script type="application/ld+json">${JSON.stringify({
+      duration: "PT136M",
+      director: JSON.parse(director),
+    })}</script>`;
+
+  const from = async (d: string) =>
+    (
+      await createEnricher({
+        async get(url: string) {
+          // Force the fallback: the search returns nothing matching.
+          return { body: url.includes("api.") ? '{"items":[]}' : page(d) } as any;
+        },
+      } as any).enrich({ lid: "x1", slug: "s", name: "n", year: 1999 })
+    ).director;
+
+  expect(
+    await from('[{"@type":"Person","name":"Lana Wachowski"},{"name":"Lilly Wachowski"}]'),
+  ).toBe("Lana Wachowski, Lilly Wachowski");
+  // A single director arrives as a bare object rather than a one-item array.
+  expect(await from('{"@type":"Person","name":"Céline Sciamma"}')).toBe("Céline Sciamma");
+  expect(await from("null")).toBeNull();
+});

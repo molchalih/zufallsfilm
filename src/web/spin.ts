@@ -181,10 +181,6 @@ export function formatRuntime(minutes: number | null): string {
   return minutes === null ? "—" : `${minutes} min`;
 }
 
-export function formatRating(rating: number | null): string {
-  return rating === null ? "—" : rating.toFixed(2);
-}
-
 export function formatYear(year: number | null): string {
   return year === null ? "—" : String(year);
 }

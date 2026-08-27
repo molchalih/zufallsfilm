@@ -9,7 +9,6 @@ import {
   easeOutCubic,
   easeOutQuint,
   eliminationOrder,
-  formatRating,
   formatRuntime,
   formatYear,
   frameAt,
@@ -29,6 +28,7 @@ const film = (n: number): Film => ({
   runtime: 90 + n,
   rating: 3.5,
   poster: null,
+  director: null,
   url: `https://letterboxd.com/film/s${n}/`,
 });
 
@@ -173,8 +173,6 @@ test("the scrape bar rises monotonically with the work done", () => {
 test("unknown facts read as unknown, not as zero", () => {
   expect(formatRuntime(null)).toBe("—");
   expect(formatRuntime(98)).toBe("98 min");
-  expect(formatRating(null)).toBe("—");
-  expect(formatRating(4.5)).toBe("4.50");
   expect(formatYear(null)).toBe("—");
   expect(formatYear(1979)).toBe("1979");
 });

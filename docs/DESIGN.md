@@ -56,6 +56,7 @@ Rows marked *derived* are computed from a measurement, not observed.
 | Correct film's rank in search results | as low as index 7 of 8 | n=742 | `perPage=8` is at its limit, not comfortably above it |
 | Film page `/film/<slug>/` | HTTP 200. JSON-LD `duration`, `image`, `genre`, `countryOfOrigin`; `production:identifier` carries `lid` | n=120 | Exact by construction — no search, no ranking, no miss |
 | Film page vs search runtime agreement | 120/120 | n=120 | Drop-in fallback |
+| Search result carries `directors` | Present on every film searched; an array, so co-directed films name everyone. 2 of 25 were co-directed | n=25, 2026-08-27 | A director costs no extra request. The film page's JSON-LD `director` covers the fallback, as a bare object when there is only one |
 | Film page size | ~260 KB (177–333 KB) | 4 films | ~15× a search call. Fallback only |
 | `/film/<slug>/json/` | 403 | — | The HTML page is the working route |
 
@@ -187,7 +188,7 @@ Film shape:
 ```json
 { "lid": "eCrQ", "slug": "kill-bill-the-whole-bloody-affair",
   "name": "Kill Bill: The Whole Bloody Affair", "year": 2004,
-  "runtime": 254, "rating": 4.54,
+  "runtime": 254, "rating": 4.54, "director": "Quentin Tarantino",
   "url": "https://letterboxd.com/film/kill-bill-the-whole-bloody-affair/",
   "poster": "https://a.ltrbxd.com/resized/..." }
 ```
@@ -197,11 +198,11 @@ Film shape:
 and neither can be derived by a client, which holds at most one page of a
 watchlist the server drew from in full.
 
-`year`, `runtime`, `rating` and `poster` are `null` when unknown and are never
-omitted: a missing key cannot be told from an unknown value. There is no
-`director` field — the search endpoint does not carry one, and the film page
-that does is a fallback taken by 0.8% of films, so it would be `null` for
-almost every film. The interface shows `rating` in its place.
+`year`, `runtime`, `rating`, `poster` and `director` are `null` when unknown and
+are never omitted: a missing key cannot be told from an unknown value.
+`director` names every director, joined with `", "`, because co-direction is
+common enough to measure. The interface shows year, director and runtime;
+`rating` is served but not displayed.
 
 ### Error reasons
 
@@ -242,7 +243,7 @@ own unexpired window and remain pickable.
 |---|---|---|---|
 | `scrape` | `username` | 7 d | Owns `scraped_at`, `expected_count`, `actual_count`, `complete`. A watchlist is a slow-moving list, and a re-scrape is `ceil(N/28)` upstream requests from a single address; a day was paying that cost far more often than the data changed. The cost of the longer window is that a film removed from a watchlist stays pickable until the scrape expires |
 | `watchlist_entry` | `(username, lid)` | none — lifetime bound to its scrape | Written only by an atomic replace |
-| `film` | `lid` | 30 d | Shared across users. Not immutable: runtimes are community-editable and unreleased films carry `null` |
+| `film` | `lid` | 30 d | Shared across users. Holds runtime, rating, poster and director. Not immutable: runtimes are community-editable and unreleased films carry `null` |
 | `film` negative result | `lid` | 1 h | A miss is not a fact. Keyed by `last_attempt_at` |
 
 Rules the schema exists to enforce:
@@ -253,6 +254,11 @@ Rules the schema exists to enforce:
 - An enrichment **error** is never stored as an enrichment **miss**.
 - `poster_url` and `rating` do change. They carry `refreshed_at` and are
   re-fetched when older than 7 days, on read. They never gate a pick.
+- A migration that adds a column backdates existing rows to that same 7-day
+  boundary rather than expiring them. Expiring would make the next pick wait on
+  a re-fetch; backdating hands them to the refresh that already runs out of
+  band, so the old row is served now and the new column fills in on the next
+  read.
 - `film` is bounded by an LRU eviction at a configured row cap.
 
 ## Egress

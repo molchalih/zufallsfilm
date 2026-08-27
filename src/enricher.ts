@@ -34,6 +34,19 @@ export function parseIsoDuration(d: string): number | null {
   return Number(m[1] ?? 0) * 60 + Number(m[2] ?? 0);
 }
 
+/**
+ * Both sources give directors as a list of objects carrying a `name`, and the
+ * film page gives a bare object when there is only one. Two of 25 films
+ * measured are co-directed, so a single name is not enough.
+ */
+function directorFrom(value: unknown): string | null {
+  const list = Array.isArray(value) ? value : value ? [value] : [];
+  const names = list
+    .map((d) => (d && typeof d === "object" ? (d as { name?: unknown }).name : undefined))
+    .filter((n): n is string => typeof n === "string" && n.trim().length > 0);
+  return names.length > 0 ? names.join(", ") : null;
+}
+
 function posterFrom(sizes: PosterSize[] | undefined): string | null {
   if (!sizes?.length) return null;
   const mid = sizes.find((s) => s.width >= 300) ?? sizes[sizes.length - 1];
@@ -56,6 +69,7 @@ export function createEnricher(fetcher: Fetcher) {
       runtime: hit.runTime as number,
       rating: (hit.rating as number | undefined) ?? null,
       poster: posterFrom((hit.poster as { sizes?: PosterSize[] } | undefined)?.sizes),
+      director: directorFrom(hit.directors),
     };
   }
 
@@ -65,18 +79,20 @@ export function createEnricher(fetcher: Fetcher) {
     let runtime: number | null = null;
     let rating: number | null = null;
     let poster: string | null = null;
+    let director: string | null = null;
     if (ld) {
       try {
         const j = JSON.parse(ld[1].replace(/\/\*[\s\S]*?\*\//g, "").trim());
         runtime = typeof j.duration === "string" ? parseIsoDuration(j.duration) : null;
         poster = typeof j.image === "string" ? j.image : null;
+        director = directorFrom(j.director);
         const rv = j.aggregateRating?.ratingValue;
         rating = rv == null ? null : Number(rv);
       } catch {
         // Leave the fields null; a parse failure here is a miss, not an error.
       }
     }
-    return { lid: film.lid, runtime, rating, poster };
+    return { lid: film.lid, runtime, rating, poster, director };
   }
 
   return {

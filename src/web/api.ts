@@ -8,6 +8,7 @@ export type Film = {
   runtime: number | null;
   rating: number | null;
   poster: string | null;
+  director: string | null;
   url: string;
 };
 

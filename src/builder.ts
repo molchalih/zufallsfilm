@@ -196,7 +196,7 @@ export function createBuilder(deps: {
         } catch {
           // An error is not a miss: return unknown without poisoning the cache.
           metrics.inc("enrich_error");
-          return { lid: f.lid, runtime: null, rating: null, poster: null };
+          return { lid: f.lid, runtime: null, rating: null, poster: null, director: null };
         }
       } finally {
         step();
@@ -210,6 +210,7 @@ export function createBuilder(deps: {
         runtime: m?.runtime ?? null,
         rating: m?.rating ?? null,
         poster: m?.poster ?? null,
+        director: m?.director ?? null,
       };
     });
   }

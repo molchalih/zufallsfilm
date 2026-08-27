@@ -17,7 +17,7 @@ function page(total: number, lids: string[]) {
 
 const enricher = {
   async enrich(f: any) {
-    return { lid: f.lid, runtime: 90, rating: null, poster: null };
+    return { lid: f.lid, runtime: 90, rating: null, poster: null, director: null };
   },
 };
 

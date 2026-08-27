@@ -27,6 +27,7 @@ const film = (n: number, poster: string | null = null): Film => ({
   runtime: 90,
   rating: null,
   poster,
+  director: null,
   url: `https://letterboxd.com/film/s${n}/`,
 });
 
