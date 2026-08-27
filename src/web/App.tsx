@@ -85,6 +85,10 @@ export function App() {
   const [spin, setSpin] = useState<Spin | null>(null);
   const [t, setT] = useState(0);
   const [progress, setProgress] = useState<Progress | null>(null);
+  // How long the current wait has run, and whether the response is in hand.
+  // The bar needs both: a warm build reports no work at all.
+  const [waited, setWaited] = useState(0);
+  const [settled, setSettled] = useState(false);
   // A verdict on the name in the field, shown on the field rather than by
   // replacing the page the visitor is standing on.
   const [rejection, setRejection] = useState<Copy | null>(null);
@@ -112,6 +116,8 @@ export function App() {
     setSpin(null);
     setT(0);
     setProgress(null);
+    setWaited(0);
+    setSettled(false);
     setRejection(null);
     setPhase({ kind: "idle" });
   }, [stop]);
@@ -131,6 +137,8 @@ export function App() {
       setPhase({ kind: "loading" });
       setT(0);
       setProgress(null);
+      setWaited(0);
+      setSettled(false);
 
       // The bar reports the server's own enrichment count rather than a timer,
       // so it stalls and jumps the way the work does. A warm build finishes
@@ -138,6 +146,7 @@ export function App() {
       const introStart = performance.now();
       pollRef.current = setInterval(() => {
         if (!alive()) return;
+        setWaited(performance.now() - introStart);
         fetchProgress(user).then((p) => {
           if (alive() && p && p.total > 0) setProgress(p);
         });
@@ -152,6 +161,9 @@ export function App() {
       Promise.all([poolPromise, fetchPick(user)])
         .then(async ([pool, pickRes]) => {
           if (!alive()) return;
+          // The response is in hand: the bar has something to fill for, even
+          // where the work was already cached and nothing was ever counted.
+          setSettled(true);
           poolRef.current = { user, pool };
 
           const anim =
@@ -233,10 +245,13 @@ export function App() {
 
   const bar = useMemo(() => {
     if (phase.kind === "loading") {
-      return { width: `${scrapeBar(progress) * 100}%`, transition: "width 220ms linear" };
+      return {
+        width: `${scrapeBar(progress, waited, settled) * 100}%`,
+        transition: "width 220ms linear",
+      };
     }
     return { width: phase.kind === "spinning" ? `${t * 100}%` : "0%" };
-  }, [phase.kind, progress, t]);
+  }, [phase.kind, progress, waited, settled, t]);
 
   const busy = phase.kind === "loading" || phase.kind === "spinning";
   // Loading holds whatever was already on stage — the design keeps the idle

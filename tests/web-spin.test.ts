@@ -16,6 +16,7 @@ import {
   mulberry32,
   padIndex,
   SCRAPE_BAR_FLOOR,
+  SCRAPE_BAR_HALFLIFE_MS,
   scrapeBar,
   smootherstep,
 } from "../src/web/spin";
@@ -148,26 +149,65 @@ test("the elimination field is reproducible from its seed", () => {
   expect(eliminationOrder(mulberry32(5))).toEqual(eliminationOrder(mulberry32(5)));
 });
 
-test("the scrape bar never starts empty and never claims to be finished", () => {
+test("the scrape bar never starts empty and never claims to be finished early", () => {
   // A zero-width bar reads as a bar that is not running; a full one reads as
   // work that is done, and the response has not landed yet.
-  expect(scrapeBar(null)).toBe(SCRAPE_BAR_FLOOR);
-  expect(scrapeBar({ done: 0, total: 0 })).toBe(SCRAPE_BAR_FLOOR);
-  expect(scrapeBar({ done: 0, total: 60 })).toBe(SCRAPE_BAR_FLOOR);
-  expect(scrapeBar({ done: 60, total: 60 })).toBeLessThan(1);
-  expect(scrapeBar({ done: 60, total: 60 })).toBeGreaterThan(0.9);
+  expect(scrapeBar(null, 0, false)).toBe(SCRAPE_BAR_FLOOR);
+  expect(scrapeBar({ done: 0, total: 0 }, 0, false)).toBe(SCRAPE_BAR_FLOOR);
+  expect(scrapeBar({ done: 0, total: 60 }, 0, false)).toBe(SCRAPE_BAR_FLOOR);
+  expect(scrapeBar({ done: 60, total: 60 }, 0, false)).toBeLessThan(1);
+  // However long the wait runs, time alone never reaches the end.
+  expect(scrapeBar(null, 600_000, false)).toBeLessThan(1);
+});
+
+test("the scrape bar fills only once the response is in hand", () => {
+  // The warm case: nothing to enrich, so no poll ever observes any work. The
+  // bar used to sit at its floor for the whole hold and look broken.
+  expect(scrapeBar(null, 5, true)).toBe(1);
+  expect(scrapeBar({ done: 0, total: 0 }, 5, true)).toBe(1);
+});
+
+test("waiting moves the bar even when no work is ever reported", () => {
+  const at = (ms: number) => scrapeBar(null, ms, false);
+  expect(at(0)).toBeLessThan(at(200));
+  expect(at(200)).toBeLessThan(at(800));
+  expect(at(800)).toBeLessThan(at(3000));
+  // Halfway down the track at the half-life, by construction.
+  expect(at(SCRAPE_BAR_HALFLIFE_MS)).toBeCloseTo(
+    SCRAPE_BAR_FLOOR + 0.5 * (0.97 - SCRAPE_BAR_FLOOR),
+    6,
+  );
+});
+
+test("real work overtakes the clock and the bar never goes backwards", () => {
+  // Elapsed time is not evidence of progress, so it must not outrun what the
+  // server reported; and neither term may ever pull the bar back.
+  let prev = -1;
+  for (let ms = 0; ms <= 12_000; ms += 100) {
+    const done = Math.min(60, Math.floor(ms / 100));
+    const w = scrapeBar({ done, total: 60 }, ms, false);
+    expect(w).toBeGreaterThanOrEqual(prev);
+    expect(w).toBeLessThanOrEqual(1);
+    prev = w;
+  }
+  // A burst of work outruns a short wait.
+  expect(scrapeBar({ done: 55, total: 60 }, 100, false)).toBeGreaterThan(
+    scrapeBar(null, 100, false),
+  );
 });
 
 test("the scrape bar rises monotonically with the work done", () => {
   let prev = -1;
   for (let done = 0; done <= 60; done++) {
-    const w = scrapeBar({ done, total: 60 });
+    const w = scrapeBar({ done, total: 60 }, 0, false);
     expect(w).toBeGreaterThanOrEqual(prev);
     expect(w).toBeLessThanOrEqual(1);
     prev = w;
   }
   // A count past its total cannot push the bar off the end of the track.
-  expect(scrapeBar({ done: 999, total: 60 })).toBe(scrapeBar({ done: 60, total: 60 }));
+  expect(scrapeBar({ done: 999, total: 60 }, 0, false)).toBe(
+    scrapeBar({ done: 60, total: 60 }, 0, false),
+  );
 });
 
 test("unknown facts read as unknown, not as zero", () => {

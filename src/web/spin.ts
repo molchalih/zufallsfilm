@@ -160,18 +160,45 @@ export function eliminationOrder(rng: Rng, cells = ELIM_CELLS, cols = ELIM_COLS)
 /**
  * The bar shown while a build runs, as a fraction of the track.
  *
- * It reports the server's real enrichment count, so it advances in bursts and
- * stalls between them the way the work actually does. Two adjustments keep it
- * honest rather than merely accurate: it never starts at zero, because a bar
- * with no width reads as a bar that is not running; and it never reaches full
- * on its own, because the request is not finished until the response lands.
+ * It reports the whole wait, not one phase of it. The enrichment count is the
+ * only part of a build the server can measure, and on a warm watchlist there
+ * is none: the response lands inside a millisecond, no poll ever observes it,
+ * and a bar driven by that count alone sits at its floor and looks broken.
+ *
+ * So the fraction is whichever is further along:
+ *
+ * - the work actually done, which advances in bursts and stalls between them;
+ * - time spent waiting, on a curve that approaches but never reaches the end,
+ *   because elapsed time is not evidence of progress and must never overtake
+ *   what the server has really reported.
+ *
+ * Both are monotonic, so the larger of them is too, and the bar cannot go
+ * backwards. It fills only when `settled` says the response is actually in
+ * hand; until then it holds short of the end however long it has waited.
  */
 export const SCRAPE_BAR_FLOOR = 0.04;
 const SCRAPE_BAR_CEILING = 0.97;
+/**
+ * The elapsed time at which waiting alone carries the bar halfway.
+ *
+ * Deliberately far longer than a typical build. Time is the fallback, not the
+ * story: set near the length of a real wait it outruns the work and smooths
+ * the bursts and stalls into a steady sweep, which is the thing that made the
+ * count worth reporting in the first place. Long, it covers the stretch before
+ * enrichment starts and is overtaken the moment there is anything to count.
+ */
+export const SCRAPE_BAR_HALFLIFE_MS = 6000;
 
-export function scrapeBar(progress: { done: number; total: number } | null): number {
-  if (!progress || progress.total <= 0) return SCRAPE_BAR_FLOOR;
-  const fraction = clamp01(progress.done / progress.total);
+export function scrapeBar(
+  progress: { done: number; total: number } | null,
+  elapsedMs: number,
+  settled: boolean,
+): number {
+  if (settled) return 1;
+  const byWork = progress && progress.total > 0 ? clamp01(progress.done / progress.total) : 0;
+  const waited = Math.max(0, elapsedMs);
+  const byTime = waited / (waited + SCRAPE_BAR_HALFLIFE_MS);
+  const fraction = Math.max(byWork, byTime);
   return SCRAPE_BAR_FLOOR + fraction * (SCRAPE_BAR_CEILING - SCRAPE_BAR_FLOOR);
 }
 
