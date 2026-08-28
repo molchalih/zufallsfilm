@@ -1,6 +1,8 @@
 node_modules/
 *.sqlite
-*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
 data/
 .env
 .bundle-check/
+.DS_Store
