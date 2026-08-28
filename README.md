@@ -48,7 +48,7 @@ Error responses carry a machine-readable `reason`; the full table is in
 ## Development
 
 ```bash
-bun run check      # typecheck, lint, tests
+bun run check      # typecheck, lint, bundle, tests
 bun test           # 80 tests, no network required
 LIVE=1 bun test    # adds the opt-in live smoke test
 ```

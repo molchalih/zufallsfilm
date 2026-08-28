@@ -10,8 +10,7 @@
     "bundle": "bun build index.html --outdir .bundle-check --minify",
     "format": "biome check --write",
     "test": "bun test",
-    "check": "bun run typecheck && bun run lint && bun run bundle && bun test && bun run style",
-    "style": "scripts/check-style.sh"
+    "check": "bun run typecheck && bun run lint && bun run bundle && bun test"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.10",

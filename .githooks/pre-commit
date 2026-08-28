@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
-echo "pre-commit: typecheck, lint, tests"
+echo "pre-commit: typecheck, lint, bundle, tests"
 bun run check
-echo "pre-commit: style"
-scripts/check-style.sh

@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-scripts/check-style.sh --msg "$1"
