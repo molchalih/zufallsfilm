@@ -200,7 +200,17 @@ export function openStore(path: string) {
       return (db.query("PRAGMA user_version").get() as { user_version: number }).user_version;
     },
 
+    /**
+     * Checkpoints the write-ahead log into the database file, then closes.
+     *
+     * Without the checkpoint the committed data lives only in `-wal` whenever
+     * anything else still holds the database open, and SQLite cannot fold it
+     * back on the way out. A backup or a volume snapshot taken of the database
+     * file alone would then be missing every write since the last automatic
+     * checkpoint.
+     */
     close() {
+      db.exec("PRAGMA wal_checkpoint(TRUNCATE);");
       db.close();
     },
   };

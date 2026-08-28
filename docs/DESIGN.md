@@ -277,6 +277,11 @@ Rules the schema exists to enforce:
   band, so the old row is served now and the new column fills in on the next
   read.
 - `film` is bounded by an LRU eviction at a configured row cap.
+- `close()` checkpoints the write-ahead log into the database file before
+  closing. SQLite folds the log back only when the last connection goes, so
+  without it a close with anything else holding the file leaves every write
+  since the last automatic checkpoint in `-wal` alone, where a backup or a
+  volume snapshot of the database file will not find it.
 
 ## Egress
 

@@ -207,3 +207,37 @@ test("a row that already has a director is left alone by the backfill", async ()
     },
   );
 });
+
+test("closing checkpoints the write-ahead log into the database file", async () => {
+  // The defect this guards: SQLite folds the WAL back only when the last
+  // connection goes, so with anything else holding the file open a close left
+  // every write since the last automatic checkpoint in `-wal` alone. A backup
+  // or a volume snapshot of the database file then had none of it.
+  const path = `${import.meta.dir}/../.wal-${Math.random().toString(36).slice(2)}.sqlite`;
+  const copy = `${path}.copy`;
+  const other = new Database(path);
+  try {
+    const store = openStore(path);
+    store.putWatchlist("u", [f("a"), f("b")], 2, 1000);
+    other.query("PRAGMA user_version").get();
+    expect(Bun.file(`${path}-wal`).size).toBeGreaterThan(0);
+
+    store.close();
+    expect(Bun.file(`${path}-wal`).size).toBe(0);
+
+    // The database file alone, without its log, carries the whole watchlist.
+    await Bun.write(copy, Bun.file(path));
+    const reopened = openStore(copy);
+    expect(reopened.getWatchlist("u").map((x) => x.lid)).toEqual(["a", "b"]);
+    reopened.close();
+  } finally {
+    other.close();
+    for (const p of [path, copy]) {
+      for (const suffix of ["", "-wal", "-shm"]) {
+        await Bun.file(p + suffix)
+          .delete()
+          .catch(() => {});
+      }
+    }
+  }
+});

@@ -43,7 +43,8 @@ const evictTimer = setInterval(
 );
 
 // A container gets SIGTERM on `docker compose down`. Without this the timer
-// holds the loop open and SQLite closes without checkpointing its WAL.
+// holds the loop open and the database is never closed, so its write-ahead log
+// is never checkpointed back into the file the volume actually carries.
 let shuttingDown = false;
 for (const sig of ["SIGTERM", "SIGINT"] as const) {
   process.on(sig, () => {
