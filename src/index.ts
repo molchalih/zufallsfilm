@@ -64,6 +64,7 @@ console.log(
     event: "start",
     port: cfg.port,
     egress: cfg.egressProxy ? "proxy" : "direct",
+    trustProxy: cfg.trustProxy,
   }),
 );
 

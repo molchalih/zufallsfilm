@@ -67,10 +67,27 @@ and by CI. Only `tests/live.test.ts` touches the network, and it skips unless
 | `MAX_WATCHLIST` | `6000` | Refuse watchlists above this size |
 | `REQUEST_TIMEOUT_MS` | `20000` | Per-request timeout |
 | `BUILD_BUDGET_MS` | `300000` | Total build budget |
+| `TRUST_PROXY` | `false` | Read the caller's address from `X-Forwarded-For`. See § Inbound addresses |
 | `RATE_PER_MIN` / `RATE_BURST` | `20` / `10` | Inbound limit per IP |
 | `DISTINCT_USERS_PER_WINDOW` | `15` | Distinct usernames per IP per minute |
 | `GLOBAL_REQ_PER_SEC` | `8` | Shared ceiling toward Letterboxd |
 | `FILM_CAP` | `200000` | Row cap before LRU eviction |
+
+## Inbound addresses
+
+The inbound rate limiter meters by caller address, and what that address is
+depends on what sits in front of the service.
+
+| Deployment | `TRUST_PROXY` | Address used |
+|---|---|---|
+| Exposed directly | `false` (default) | The connecting peer |
+| Behind a reverse proxy you control | `true` | The first entry of `X-Forwarded-For`, falling back to the peer |
+
+It is off by default because `X-Forwarded-For` is a request header like any
+other: with nothing in front of the service, trusting it lets a caller mint a
+fresh bucket per request by varying it, which is the whole limiter gone. Turn it
+on only where a proxy you control sets the header, since a proxy that appends to
+a client-supplied value is no safer than trusting the client.
 
 ## Documentation
 

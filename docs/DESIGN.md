@@ -328,6 +328,7 @@ structurally unable to detect loss: a review reproduced a **44% silent loss**
 | Structured logs and metrics: parse yield, enrichment miss rate, 403 rate by class, scrape completeness | The 44% loss above would be invisible in production without them |
 | `film` row cap with LRU eviction | The table otherwise grows monotonically forever |
 | Global request ceiling toward Letterboxd | Politeness, and self-preservation of the exit IP |
+| `X-Forwarded-For` is read only where `TRUST_PROXY` declares a proxy in front | Exposed directly, the header is caller-supplied: trusting it hands every caller a fresh bucket per request and the limiter above stops existing. Behind a proxy, ignoring it meters every visitor as the one address the proxy connects from |
 | The limiter's bucket per address is forgotten once it has refilled and its username window has cleared | A bucket in that state is indistinguishable from an address never seen, so dropping it changes no verdict. Kept forever, the map is unbounded memory an unauthenticated caller controls by varying its source address |
 
 ## Testing

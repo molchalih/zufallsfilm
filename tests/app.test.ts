@@ -330,3 +330,49 @@ test("progress is readable while a build runs and is not rate limited", async ()
   at = null;
   expect(await json(await app.request("/progress/u"))).toEqual({ done: 0, total: 0 });
 });
+
+test("a forwarded-for header is ignored unless the deployment declares a proxy", async () => {
+  // The defect this guards: honouring `X-Forwarded-For` unconditionally let any
+  // caller mint a fresh bucket per request by varying the header, which walks
+  // straight past the limiter that stops this service being an amplifier.
+  const app = createApp({
+    builder: okBuilder as any,
+    store: openStore(":memory:"),
+    cfg,
+    limiter: createLimiter({
+      ratePerMin: 60,
+      burst: 1,
+      distinctUsersPerWindow: 100,
+      windowMs: 60_000,
+    }),
+    metrics: createMetrics(),
+  });
+  const spoof = (ip: string) => app.request("/pick?user=u", { headers: { "x-forwarded-for": ip } });
+  expect((await spoof("1.1.1.1")).status).toBe(200);
+  expect((await spoof("2.2.2.2")).status).toBe(429);
+  expect((await spoof("3.3.3.3")).status).toBe(429);
+});
+
+test("a declared proxy's forwarded-for header is the caller's address", async () => {
+  // Behind a proxy the peer address is the proxy's, so without this every
+  // visitor shares one bucket and the first of them throttles the rest.
+  const app = createApp({
+    builder: okBuilder as any,
+    store: openStore(":memory:"),
+    cfg: loadConfig({ TRUST_PROXY: "true" }),
+    limiter: createLimiter({
+      ratePerMin: 60,
+      burst: 1,
+      distinctUsersPerWindow: 100,
+      windowMs: 60_000,
+    }),
+    metrics: createMetrics(),
+  });
+  const from = (ip: string) => app.request("/pick?user=u", { headers: { "x-forwarded-for": ip } });
+  expect((await from("1.1.1.1")).status).toBe(200);
+  expect((await from("2.2.2.2")).status).toBe(200);
+  // The first visitor still has only its own bucket.
+  expect((await from("1.1.1.1")).status).toBe(429);
+  // A chain names the client first; the proxies behind it are not the caller.
+  expect((await from("9.9.9.9, 10.0.0.1")).status).toBe(200);
+});

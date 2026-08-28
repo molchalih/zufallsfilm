@@ -77,7 +77,19 @@ export function createApp(deps: {
 
   app.get("/metrics", (c) => c.json(metrics.snapshot()));
 
-  const clientIp = (c: Context) => c.req.header("x-forwarded-for")?.split(",")[0].trim() ?? "local";
+  type PeerSource = { requestIP?: (req: Request) => { address: string } | null };
+
+  // `X-Forwarded-For` is honoured only where the deployment declares a proxy in
+  // front. Trusting it unconditionally lets any caller mint a fresh bucket per
+  // request and walk straight past the limiter; ignoring it behind a proxy
+  // meters every visitor as the one address the proxy connects from.
+  const clientIp = (c: Context) => {
+    if (cfg.trustProxy) {
+      const forwarded = c.req.header("x-forwarded-for")?.split(",")[0].trim();
+      if (forwarded) return forwarded;
+    }
+    return (c.env as PeerSource | undefined)?.requestIP?.(c.req.raw)?.address ?? "local";
+  };
 
   app.get("/health", (c) =>
     c.json({

@@ -8,6 +8,7 @@ export type Config = Readonly<{
   filmTtlMs: number;
   scrapeTtlMs: number;
   negativeTtlMs: number;
+  trustProxy: boolean;
 }>;
 
 type Env = Record<string, string | undefined>;
@@ -18,6 +19,14 @@ function num(env: Env, key: string, fallback: number): number {
   const n = Number(raw);
   if (!Number.isFinite(n)) throw new Error(`${key} must be a number, got "${raw}"`);
   return n;
+}
+
+function bool(env: Env, key: string, fallback: boolean): boolean {
+  const raw = env[key];
+  if (raw === undefined || raw === "") return fallback;
+  if (raw === "1" || raw === "true") return true;
+  if (raw === "0" || raw === "false") return false;
+  throw new Error(`${key} must be true or false, got "${raw}"`);
 }
 
 export function loadConfig(env: Env): Config {
@@ -38,5 +47,6 @@ export function loadConfig(env: Env): Config {
     filmTtlMs: num(env, "FILM_TTL_MS", 30 * 24 * 60 * 60 * 1000),
     scrapeTtlMs: num(env, "SCRAPE_TTL_MS", 7 * 24 * 60 * 60 * 1000),
     negativeTtlMs: num(env, "NEGATIVE_TTL_MS", 60 * 60 * 1000),
+    trustProxy: bool(env, "TRUST_PROXY", false),
   });
 }

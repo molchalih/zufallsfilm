@@ -8,6 +8,7 @@ test("defaults apply when env is empty", () => {
   expect(c.maxWatchlist).toBe(6000);
   expect(c.requestTimeoutMs).toBe(20_000);
   expect(c.buildBudgetMs).toBe(300_000);
+  expect(c.trustProxy).toBe(false);
 });
 
 test("env overrides are parsed as numbers", () => {
@@ -26,4 +27,15 @@ test("egress proxy must be http, not socks", () => {
 test("config is frozen", () => {
   const c = loadConfig({});
   expect(Object.isFrozen(c)).toBe(true);
+});
+
+test("proxy trust is off unless it is declared, and is declared as a boolean", () => {
+  expect(loadConfig({}).trustProxy).toBe(false);
+  expect(loadConfig({ TRUST_PROXY: "" }).trustProxy).toBe(false);
+  expect(loadConfig({ TRUST_PROXY: "true" }).trustProxy).toBe(true);
+  expect(loadConfig({ TRUST_PROXY: "1" }).trustProxy).toBe(true);
+  expect(loadConfig({ TRUST_PROXY: "false" }).trustProxy).toBe(false);
+  expect(loadConfig({ TRUST_PROXY: "0" }).trustProxy).toBe(false);
+  // Not silently false: a typo that disables a security control must be loud.
+  expect(() => loadConfig({ TRUST_PROXY: "yes" })).toThrow(/must be true or false/);
 });
