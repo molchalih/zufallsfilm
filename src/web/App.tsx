@@ -322,7 +322,11 @@ export function App() {
       <footer className="footer">
         <span className="footer-text">
           2026 · created by{" "}
-          <a href="https://github.com/molchalih" target="_blank" rel="noopener noreferrer">
+          <a
+            href="https://github.com/molchalih/zufallsfilm"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             molchalih
           </a>
         </span>
