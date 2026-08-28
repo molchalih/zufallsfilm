@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { createApp } from "../src/app";
-import { BuildError } from "../src/builder";
+import { BuildError } from "../src/build";
 import { loadConfig } from "../src/config";
 import { createMetrics } from "../src/metrics";
 import { createLimiter } from "../src/ratelimit";
@@ -19,8 +19,8 @@ const limiter = () =>
   });
 
 const films = [
-  { lid: "a", slug: "a", name: "A", year: 2000, runtime: 80 },
-  { lid: "b", slug: "b", name: "B", year: 2001, runtime: 200 },
+  { lid: "a", name: "A", year: 2000, url: "https://letterboxd.com/film/a/", runtime: 80 },
+  { lid: "b", name: "B", year: 2001, url: "https://letterboxd.com/film/b/", runtime: 200 },
 ];
 const okBuilder = {
   async getWatchlist() {
@@ -66,7 +66,9 @@ test("pick returns a film from the watchlist", async () => {
   });
   const body = await json(await app.request("/pick?user=u"));
   expect(["a", "b"]).toContain(body.film.lid);
-  expect(body.film.url).toBe(`https://letterboxd.com/film/${body.film.slug}/`);
+  // The film carries its own URL; the route never rebuilds one from an
+  // identifier only the HTML path has.
+  expect(body.film.url).toBe(`https://letterboxd.com/film/${body.film.lid}/`);
 });
 
 test("pick honours maxRuntime", async () => {
@@ -228,9 +230,9 @@ test("an unfiltered pick enriches one film, not the whole watchlist", async () =
   // takes longer than any proxy will hold the connection open.
   const pool = Array.from({ length: 500 }, (_, i) => ({
     lid: `l${i}`,
-    slug: `s${i}`,
     name: `F${i}`,
     year: 2000,
+    url: `https://letterboxd.com/film/s${i}/`,
   }));
   let enriched = 0;
   const builder = {
@@ -269,9 +271,9 @@ test("an unfiltered pick enriches one film, not the whole watchlist", async () =
 test("a watchlist page enriches its page, not the watchlist behind it", async () => {
   const pool = Array.from({ length: 500 }, (_, i) => ({
     lid: `l${i}`,
-    slug: `s${i}`,
     name: `F${i}`,
     year: 2000,
+    url: `https://letterboxd.com/film/s${i}/`,
   }));
   let enriched = 0;
   const app = createApp({

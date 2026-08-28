@@ -3,7 +3,12 @@ import { expect, test } from "bun:test";
 import { openStore } from "../src/store";
 import type { Film } from "../src/types";
 
-const f = (lid: string): Film => ({ lid, slug: lid, name: lid, year: null });
+const f = (lid: string): Film => ({
+  lid,
+  name: lid,
+  year: null,
+  url: `https://letterboxd.com/film/${lid}/`,
+});
 const fresh = () => openStore(":memory:");
 
 test("a complete scrape round-trips", () => {
@@ -148,7 +153,7 @@ test("a pre-director database gains the column and keeps every row", async () =>
     },
     (path) => {
       const store = openStore(path);
-      expect(store.schemaVersion()).toBe(3);
+      expect(store.schemaVersion()).toBe(4);
       const row = store.getFilm("a", Date.now(), 30 * 24 * 60 * 60 * 1000, 60 * 60 * 1000);
       expect(row?.runtime).toBe(90);
       expect(row?.rating).toBe(4);
@@ -203,6 +208,38 @@ test("a row that already has a director is left alone by the backfill", async ()
       const row = store.getFilm("a", Date.now(), 30 * 24 * 60 * 60 * 1000, 60 * 60 * 1000);
       expect(row?.director).toBe("Chantal Akerman");
       expect(row?.metaStale).toBe(false);
+      store.close();
+    },
+  );
+});
+
+test("a pre-url database keeps every entry, addressed by its canonical URL", async () => {
+  await withV1Database(
+    (db) => {
+      db.run(
+        `INSERT INTO watchlist_entry (username, lid, slug, name, year, position)
+         VALUES (?,?,?,?,?,?)`,
+        ["u", "2abc", "ivans-childhood", "Ivan's Childhood", 1962, 0],
+      );
+      db.run(
+        `INSERT INTO scrape (username, scraped_at, expected_count, actual_count, complete)
+         VALUES (?,?,?,?,?)`,
+        ["u", Date.now(), 1, 1, 1],
+      );
+    },
+    (path) => {
+      const store = openStore(path);
+      expect(store.getWatchlist("u")).toEqual([
+        {
+          lid: "2abc",
+          name: "Ivan's Childhood",
+          year: 1962,
+          url: "https://letterboxd.com/film/ivans-childhood/",
+        },
+      ]);
+      // The scrape survives the rebuild, or every cached watchlist would be
+      // served empty until it expired.
+      expect(store.getScrape("u")?.complete).toBe(true);
       store.close();
     },
   );

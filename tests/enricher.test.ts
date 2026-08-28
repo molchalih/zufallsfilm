@@ -2,7 +2,12 @@ import { expect, test } from "bun:test";
 import { createEnricher, parseIsoDuration, searchUrl } from "../src/enricher";
 import type { Film } from "../src/types";
 
-const film: Film = { lid: "2abc", slug: "ivans-childhood", name: "Ivan's Childhood", year: 1962 };
+const film: Film = {
+  lid: "2abc",
+  name: "Ivan's Childhood",
+  year: 1962,
+  url: "https://letterboxd.com/film/ivans-childhood/",
+};
 
 const searchBody = (items: any[]) => JSON.stringify({ items });
 const filmItem = (id: string, runTime: number | null) => ({
@@ -114,7 +119,7 @@ test("a director comes from the search result, which already carries one", async
         }),
       } as any;
     },
-  } as any).enrich({ lid: "x1", slug: "s", name: "n", year: 2000 });
+  } as any).enrich({ lid: "x1", name: "n", year: 2000, url: "https://letterboxd.com/film/s/" });
   expect(meta.director).toBe("Wong Kar-Wai");
 });
 
@@ -135,7 +140,7 @@ test("co-directed films name everyone", async () => {
         }),
       } as any;
     },
-  } as any).enrich({ lid: "x1", slug: "s", name: "n", year: 2022 });
+  } as any).enrich({ lid: "x1", name: "n", year: 2022, url: "https://letterboxd.com/film/s/" });
   expect(meta.director).toBe("Daniel Scheinert, Daniel Kwan");
 });
 
@@ -153,7 +158,12 @@ test("the film-page fallback reads a director too, in either JSON-LD shape", asy
           // Force the fallback: the search returns nothing matching.
           return { body: url.includes("api.") ? '{"items":[]}' : page(d) } as any;
         },
-      } as any).enrich({ lid: "x1", slug: "s", name: "n", year: 1999 })
+      } as any).enrich({
+        lid: "x1",
+        name: "n",
+        year: 1999,
+        url: "https://letterboxd.com/film/s/",
+      })
     ).director;
 
   expect(

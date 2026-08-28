@@ -5,7 +5,12 @@ import { openStore } from "../src/store";
 
 const cfg = loadConfig({});
 const films = (n: number) =>
-  Array.from({ length: n }, (_, i) => ({ lid: `l${i}`, slug: `s${i}`, name: `F${i}`, year: 2000 }));
+  Array.from({ length: n }, (_, i) => ({
+    lid: `l${i}`,
+    name: `F${i}`,
+    year: 2000,
+    url: `https://letterboxd.com/film/s${i}/`,
+  }));
 
 function build(onEnrich: (lid: string) => Promise<void> | void = () => {}) {
   const store = openStore(":memory:");

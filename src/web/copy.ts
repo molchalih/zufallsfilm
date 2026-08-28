@@ -26,6 +26,7 @@ const BY_REASON: Record<string, string> = {
   throttled_rate: "too fast. take an intermission.",
   throttled_variety: "too many names at once.",
   upstream_blocked: "projector failure.",
+  upstream_error: "projector failure.",
   incomplete: "the print is damaged.",
   internal: "projector failure.",
   building: "still threading the reel.",

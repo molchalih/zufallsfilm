@@ -1,15 +1,21 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import index from "../index.html";
+import { createApiBuilder } from "./apiBuilder";
 import { createApp } from "./app";
+import type { Builder } from "./build";
 import { createBuilder } from "./builder";
+import { createClient } from "./client";
 import { loadConfig } from "./config";
 import { createEnricher } from "./enricher";
 import { createFetcher, createRateGate } from "./fetcher";
+import { createLetterboxd } from "./letterboxd";
 import { createMetrics } from "./metrics";
 import { createLimiter } from "./ratelimit";
 import { openStore } from "./store";
 
+// Throws here, before anything is opened or listened on, when WATCHLIST_SOURCE
+// selects a path whose credentials are missing.
 const cfg = loadConfig(process.env as Record<string, string | undefined>);
 
 // Ensure the directory exists and let SQLite create the file itself. Writing
@@ -19,12 +25,32 @@ if (cfg.dbPath !== ":memory:") {
 }
 const store = openStore(cfg.dbPath);
 
-// createFetcher's third parameter has a default; pass undefined to keep it.
-const gate = createRateGate(Number(process.env.GLOBAL_REQ_PER_SEC ?? 8));
-const fetcher = createFetcher(cfg, fetch, undefined, gate);
-const enricher = createEnricher(fetcher);
 const metrics = createMetrics();
-const builder = createBuilder({ fetcher, enricher, store, cfg, metrics });
+
+// One gate for whichever path is wired. Each path names its own ceiling: the
+// site is read four pages at a time under `GLOBAL_REQ_PER_SEC`, the API under
+// the rate its own terms give.
+const gate = createRateGate(
+  cfg.source === "api" ? cfg.apiReqPerSec : Number(process.env.GLOBAL_REQ_PER_SEC ?? 8),
+);
+
+// Two builders, one contract. Only the selected path's collaborators are
+// constructed: the API path never builds a fetcher or an enricher, and the HTML
+// path never opens an API client.
+const builder: Builder =
+  cfg.source === "api"
+    ? createApiBuilder({
+        letterboxd: createLetterboxd(createClient(cfg, fetch, undefined, gate)),
+        store,
+        cfg,
+        metrics,
+      })
+    : (() => {
+        // createFetcher's third parameter has a default; pass undefined to keep it.
+        const fetcher = createFetcher(cfg, fetch, undefined, gate);
+        return createBuilder({ fetcher, enricher: createEnricher(fetcher), store, cfg, metrics });
+      })();
+
 const limiter = createLimiter({
   ratePerMin: Number(process.env.RATE_PER_MIN ?? 20),
   burst: Number(process.env.RATE_BURST ?? 10),
@@ -63,6 +89,7 @@ console.log(
   JSON.stringify({
     event: "start",
     port: cfg.port,
+    source: cfg.source,
     egress: cfg.egressProxy ? "proxy" : "direct",
     trustProxy: cfg.trustProxy,
   }),

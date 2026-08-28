@@ -83,6 +83,7 @@ test("a verdict on the typed name is separated from a failure of the service", (
   }
   for (const reason of [
     "upstream_blocked",
+    "upstream_error",
     "upstream_timeout",
     "incomplete",
     "internal",

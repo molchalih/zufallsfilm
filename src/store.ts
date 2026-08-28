@@ -71,6 +71,26 @@ const MIGRATIONS: string[] = [
   // waits on this, and the director arrives on the next read.
   `UPDATE film SET fetched_at = MIN(fetched_at, unixepoch() * 1000 - ${STALE_META_MS})
    WHERE director IS NULL;`,
+  // A film's canonical URL replaces its page slug: it is the one identity both
+  // read paths can produce, and the API's own link is not always a
+  // `/film/<slug>/` URL. Rebuilt rather than added alongside, so there is no
+  // second, nullable column for a reader to choose between. Every existing row
+  // came from the HTML path, where the URL is exactly the slug's page.
+  `CREATE TABLE watchlist_entry_urls (
+     username TEXT NOT NULL,
+     lid TEXT NOT NULL,
+     url TEXT NOT NULL,
+     name TEXT NOT NULL,
+     year INTEGER,
+     position INTEGER NOT NULL,
+     PRIMARY KEY (username, lid)
+   );
+   INSERT INTO watchlist_entry_urls (username, lid, url, name, year, position)
+     SELECT username, lid, 'https://letterboxd.com/film/' || slug || '/', name, year, position
+     FROM watchlist_entry;
+   DROP TABLE watchlist_entry;
+   ALTER TABLE watchlist_entry_urls RENAME TO watchlist_entry;
+   CREATE INDEX IF NOT EXISTS idx_entry_user ON watchlist_entry(username, position);`,
 ];
 
 function migrate(db: Database) {
@@ -91,7 +111,7 @@ export function openStore(path: string) {
   migrate(db);
 
   const insertEntry = db.prepare(
-    `INSERT INTO watchlist_entry (username, lid, slug, name, year, position)
+    `INSERT INTO watchlist_entry (username, lid, url, name, year, position)
      VALUES (?, ?, ?, ?, ?, ?)`,
   );
   const deleteEntries = db.prepare(`DELETE FROM watchlist_entry WHERE username = ?`);
@@ -107,24 +127,33 @@ export function openStore(path: string) {
 
   // One transaction: a partial set must never be visible.
   const replace = db.transaction(
-    (username: string, films: Film[], expected: number, now: number) => {
+    (username: string, films: Film[], expected: number, now: number, complete: boolean) => {
       deleteEntries.run(username);
       films.forEach((f, i) => {
-        insertEntry.run(username, f.lid, f.slug, f.name, f.year, i);
+        insertEntry.run(username, f.lid, f.url, f.name, f.year, i);
       });
-      upsertScrape.run(
-        username,
-        now,
-        expected,
-        films.length,
-        films.length === expected && expected > 0 ? 1 : 0,
-      );
+      upsertScrape.run(username, now, expected, films.length, complete ? 1 : 0);
     },
   );
 
   return {
-    putWatchlist(username: string, films: Film[], expectedCount: number, now: number) {
-      replace(username, films, expectedCount, now);
+    /**
+     * Replaces a user's watchlist atomically.
+     *
+     * `complete` defaults to the counts agreeing, which is what the HTML path
+     * requires: a page short of `data-num-entries` is silent loss and must
+     * never be served. The API path passes it explicitly, because there the
+     * cursor is the authority and the member's own count may legitimately
+     * exceed what the endpoint hands over.
+     */
+    putWatchlist(
+      username: string,
+      films: Film[],
+      expectedCount: number,
+      now: number,
+      complete = films.length === expectedCount && expectedCount > 0,
+    ) {
+      replace(username, films, expectedCount, now, complete);
     },
 
     getScrape(username: string): ScrapeRow | null {
@@ -144,7 +173,7 @@ export function openStore(path: string) {
     getWatchlist(username: string): Film[] {
       return db
         .query(
-          `SELECT lid, slug, name, year FROM watchlist_entry
+          `SELECT lid, url, name, year FROM watchlist_entry
            WHERE username = ? ORDER BY position`,
         )
         .all(username) as Film[];

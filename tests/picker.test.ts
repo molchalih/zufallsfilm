@@ -4,9 +4,9 @@ import { pick } from "../src/picker";
 type P = Parameters<typeof pick>[0][number];
 const f = (lid: string, runtime: number | null): P => ({
   lid,
-  slug: lid,
   name: lid,
   year: null,
+  url: `https://letterboxd.com/film/${lid}/`,
   runtime,
 });
 

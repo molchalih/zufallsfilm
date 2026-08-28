@@ -66,9 +66,11 @@ export function parseWatchlistPage(html: string): Film[] {
     const ym = rawName.match(/^(.*)\s+\((\d{4})\)$/);
     films.push({
       lid,
-      slug,
       name: ym ? ym[1] : rawName,
       year: ym ? Number(ym[2]) : null,
+      // The slug is a page address, not an identity this service carries
+      // around: it is turned into the canonical URL here and never stored.
+      url: `https://letterboxd.com/film/${slug}/`,
     });
   }
   return films;

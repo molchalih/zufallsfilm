@@ -1,7 +1,7 @@
 import type { Context } from "hono";
 import { Hono } from "hono";
-import type { Builder } from "./builder";
-import { BuildError } from "./builder";
+import type { Builder } from "./build";
+import { BuildError } from "./build";
 import type { Config } from "./config";
 import type { Metrics } from "./metrics";
 import { pick } from "./picker";
@@ -18,15 +18,16 @@ const STATUS: Record<string, ErrorStatus> = {
   watchlist_too_large: 413,
   no_match: 404,
   upstream_blocked: 502,
+  upstream_error: 502,
   upstream_timeout: 504,
   incomplete: 502,
 };
 
 type Shaped = {
   lid: string;
-  slug: string;
   name: string;
   year: number | null;
+  url: string;
   runtime: number | null;
   rating?: number | null;
   poster?: string | null;
@@ -36,16 +37,17 @@ type Shaped = {
 // The shape DESIGN.md § API contract specifies. `rating` and `poster` are
 // optional on the input because the picker only ever reads `runtime`; they are
 // never optional on the output, or a client cannot tell absent from unknown.
+// `url` is carried, never rebuilt: the two read paths disagree on how a film's
+// page is addressed, and only the film itself knows which one it came from.
 const shape = (f: Shaped) => ({
   lid: f.lid,
-  slug: f.slug,
   name: f.name,
   year: f.year,
   runtime: f.runtime,
   rating: f.rating ?? null,
   poster: f.poster ?? null,
   director: f.director ?? null,
-  url: `https://letterboxd.com/film/${f.slug}/`,
+  url: f.url,
 });
 
 export function createApp(deps: {

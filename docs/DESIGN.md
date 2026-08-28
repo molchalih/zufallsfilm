@@ -1,6 +1,6 @@
 ---
 answers: what this service is, how its modules are bounded, what its API returns, and what its interface is made of
-status: specification; implemented under src/ except watchlist_private detection
+status: specification; implemented under src/ except watchlist_private detection on the html path
 ---
 
 # Random film picker — design
@@ -62,15 +62,36 @@ Rows marked *derived* are computed from a measurement, not observed.
 
 ## Architecture
 
-Five server modules. The boundary that matters: **only `fetcher` performs I/O.**
+The boundary that matters: **only `fetcher` and `client` perform I/O**, and a
+running process holds exactly one of them.
+
+| Module | Responsibility | Depends on |
+|---|---|---|
+| `build` | The `Builder` interface, `BuildError` and its reasons. No behaviour | Nothing |
+| `store` | Reads, entries, film metadata, TTL | SQLite |
+| `picker` | `Film[]` + filter in, one `Film` out. Pure | Nothing |
+| `config` | Environment in, frozen `Config` out. Refuses a source it cannot serve | Nothing |
+
+Modules of the `html` path, selected by `WATCHLIST_SOURCE=html` (the default):
 
 | Module | Responsibility | Depends on |
 |---|---|---|
 | `fetcher` | URL in, body out. Owns proxy, timeouts, backoff, 403 classification | Egress config |
 | `parser` | HTML in, `Film[]` out. Pure | Nothing |
 | `enricher` | `Film[]` in, runtimes out. Search first, film page on miss | `fetcher` |
-| `store` | Scrapes, entries, film metadata, TTL | SQLite |
-| `picker` | `Film[]` + filter in, one `Film` out. Pure | Nothing |
+| `builder` | Numbered pages against a declared total, plus enrichment | `fetcher`, `enricher`, `store` |
+
+Modules of the `api` path, selected by `WATCHLIST_SOURCE=api`:
+
+| Module | Responsibility | Depends on |
+|---|---|---|
+| `client` | OAuth2 client-credentials tokens, signed GETs, capped retries. The only I/O | `config` |
+| `letterboxd` | The endpoints this service reads, mapped onto its own types. Pure over `client` | `client` |
+| `apiBuilder` | The cursor walk. No enrichment: a watchlist read carries every field | `letterboxd`, `store` |
+
+Both builders satisfy `build.Builder`, and `index.ts` constructs exactly one.
+They are not generalised over each other — see DR-007 for why the two
+pagination models have no useful common ancestor.
 
 The interface lives under `src/web/` and depends on the API alone. It is
 bundled by `Bun.serve`'s HTML import and mounted at `/`; Hono keeps every other
@@ -161,6 +182,14 @@ client reaches this. Removing the exception means replacing the uniform draw
 with rejection sampling, which is a change to what `picker.pick` guarantees and
 is not made here.
 
+On the `api` path the same shape holds with different costs. Page one is 100
+films rather than 28 and arrives complete, so nothing is enriched behind it; the
+walk is sequential, because the only way to the next page is the cursor the last
+one returned. Its end is declared by the API, not computed, so the walk stops on
+an empty page and refuses a cursor it has already followed rather than paging
+forever. `builder.enrich` on that path is a read of the `film` table the walk
+wrote, and every row of the table above collapses to one request each.
+
 **Coalescing is mandatory, not an optimisation.** Concurrent cold requests for
 the same user must share one build, keyed on the lowercased username. Without
 it, ten requests for a 5269-film watchlist send ~52,000 upstream requests
@@ -195,12 +224,18 @@ their words from the same table below.
 Film shape:
 
 ```json
-{ "lid": "eCrQ", "slug": "kill-bill-the-whole-bloody-affair",
+{ "lid": "eCrQ",
   "name": "Kill Bill: The Whole Bloody Affair", "year": 2004,
   "runtime": 254, "rating": 4.54, "director": "Quentin Tarantino",
   "url": "https://letterboxd.com/film/kill-bill-the-whole-bloody-affair/",
   "poster": "https://a.ltrbxd.com/resized/..." }
 ```
+
+`url` is the film's address and is carried, never rebuilt from a component of
+it. The `html` path derives it once, where it parses `data-item-slug`; the `api`
+path takes `FilmSummary.link`, which is authoritative there and is not always a
+`/film/<slug>/` URL. A page slug is therefore not something both paths can
+produce, and no route reconstructs one.
 
 `pool` is how many films the draw was made from and `position` is the film's
 1-based place among them. Neither belongs to the film — they describe the draw —
@@ -224,14 +259,15 @@ in the module that raises it.
 | `bad_max_runtime` | 400 | `maxRuntime` is not a positive finite number |
 | `user_not_found` | 404 | Profile 404s |
 | `watchlist_empty` | 404 | `data-num-entries` is 0 |
-| `watchlist_private` | 403 | Positive private-marker in the body — never inferred from a bare 403 |
+| `watchlist_private` | 403 | The `api` path's documented 403 for a private watchlist. On the `html` path, a positive private-marker in the body — never inferred from a bare 403, and not yet implemented |
 | `watchlist_too_large` | 413 | Above the configured cap |
 | `no_match` | 404 | Filter excluded every film |
 | `route_not_found` | 404 | No route matched |
 | `throttled_rate` | 429 | Inbound token bucket exhausted for the caller's IP |
 | `throttled_variety` | 429 | Too many distinct usernames from one IP in a window |
-| `upstream_blocked` | 502 | Cloudflare challenge, confirmed by marker |
-| `incomplete` | 502 | A scrape parsed fewer films than `data-num-entries`, twice |
+| `upstream_blocked` | 502 | Cloudflare challenge, confirmed by marker. `html` path |
+| `upstream_error` | 502 | An upstream failure that is neither a timeout nor a documented verdict. `api` path |
+| `incomplete` | 502 | `html`: a scrape parsed fewer films than `data-num-entries`, twice. `api`: the cursor repeated, so the walk cannot finish |
 | `internal` | 500 | An unhandled throw. Logged as `unhandled_error` |
 | `upstream_timeout` | 504 | Egress or total-build timeout |
 | `building` | 202 | Only when page 1 itself is not yet available |
@@ -259,8 +295,8 @@ own unexpired window and remain pickable.
 | Table | Key | TTL | Rationale |
 |---|---|---|---|
 | `scrape` | `username` | 7 d | Owns `scraped_at`, `expected_count`, `actual_count`, `complete`. A watchlist is a slow-moving list, and a re-scrape is `ceil(N/28)` upstream requests from a single address; a day was paying that cost far more often than the data changed. The cost of the longer window is that a film removed from a watchlist stays pickable until the scrape expires |
-| `watchlist_entry` | `(username, lid)` | none — lifetime bound to its scrape | Written only by an atomic replace |
-| `film` | `lid` | 30 d | Shared across users. Holds runtime, rating, poster and director. Not immutable: runtimes are community-editable and unreleased films carry `null` |
+| `watchlist_entry` | `(username, lid)` | none — lifetime bound to its scrape | Written only by an atomic replace. Holds `url`, the film's own address, because the two read paths disagree on how one is formed |
+| `film` | `lid` | 30 d | Shared across users. Holds runtime, rating, poster and director. Not immutable: runtimes are community-editable and unreleased films carry `null`. On the `api` path this is written by the walk rather than by an enricher, and read back instead of it |
 | `film` negative result | `lid` | 1 h | A miss is not a fact. Keyed by `last_attempt_at` |
 
 Rules the schema exists to enforce:
@@ -277,6 +313,11 @@ Rules the schema exists to enforce:
   band, so the old row is served now and the new column fills in on the next
   read.
 - `film` is bounded by an LRU eviction at a configured row cap.
+- `complete = 1` means different things per path, and the caller says which:
+  the `html` path requires the counts to agree, because a page short of
+  `data-num-entries` is silent loss; the `api` path treats a walk the cursor
+  ended as authoritative even where the member's own count disagrees, because
+  refusing to cache that re-walks the whole list on every later request.
 - `close()` checkpoints the write-ahead log into the database file before
   closing. SQLite folds the log back only when the last connection goes, so
   without it a close with anything else holding the file leaves every write
@@ -288,7 +329,9 @@ Rules the schema exists to enforce:
 `fetcher` reads its proxy from configuration and knows nothing of what is
 behind it. Some hosts are refused by the origin, so an outbound HTTP proxy may
 be required; Bun's fetch takes `http://` and not SOCKS, so the proxy has to
-expose an HTTP inbound.
+expose an HTTP inbound. The whole
+section describes the `html` path; the `api` path issues no request to
+`letterboxd.com` and needs no exit, pacing its own calls at `API_REQ_PER_SEC`.
 
 | Setting | Value |
 |---|---|
@@ -328,8 +371,8 @@ structurally unable to detect loss: a review reproduced a **44% silent loss**
 | Structured logs and metrics: parse yield, enrichment miss rate, 403 rate by class, scrape completeness | The 44% loss above would be invisible in production without them |
 | `film` row cap with LRU eviction | The table otherwise grows monotonically forever |
 | Global request ceiling toward Letterboxd | Politeness, and self-preservation of the exit IP |
-| `X-Forwarded-For` is read only where `TRUST_PROXY` declares a proxy in front | Exposed directly, the header is caller-supplied: trusting it hands every caller a fresh bucket per request and the limiter above stops existing. Behind a proxy, ignoring it meters every visitor as the one address the proxy connects from |
 | The limiter's bucket per address is forgotten once it has refilled and its username window has cleared | A bucket in that state is indistinguishable from an address never seen, so dropping it changes no verdict. Kept forever, the map is unbounded memory an unauthenticated caller controls by varying its source address |
+| `X-Forwarded-For` is read only where `TRUST_PROXY` declares a proxy in front | Exposed directly, the header is caller-supplied: trusting it hands every caller a fresh bucket per request and the limiter above stops existing. Behind a proxy, ignoring it meters every visitor as the one address the proxy connects from |
 
 ## Testing
 
@@ -340,6 +383,8 @@ structurally unable to detect loss: a review reproduced a **44% silent loss**
 | `store` | In-memory SQLite: TTL boundaries, atomic replace, removed-film deletion | None |
 | `enricher` | Stubbed `fetcher`: search hit, search miss into film-page fallback, error-not-miss | None |
 | `fetcher` | Local stub HTTP proxy asserting `CONNECT` was received; 403 classification | Loopback |
+| `client`, `letterboxd` | Stubbed `fetch` over hand-written bodies shaped from the published API schemas: token reuse, one refresh per 401, the `Retry-After` cap, cursor decoding | None |
+| `apiBuilder` | Stubbed `Letterboxd` whose pages are addressed by their cursor: coalescing, the repeated-cursor refusal, the count that disagrees | None |
 | `spin`, `anim/*` | Pure frame functions over a seeded rng: reel invariants, the winner landing on the gate, the elimination field being a permutation | None |
 | `copy`, `errorPage` | Reason-to-words mapping, status fallback, escaping | None |
 | End-to-end | One live smoke test, opt-in by env var | Live |
@@ -355,7 +400,8 @@ Only the last needs working egress, so a broken proxy cannot block the suite.
 | A new fact of this kind | Goes here |
 |---|---|
 | A new filter (genre, decade, country) | A `picker` filter field, a `film` column, a row in § Store. Source it from the **film page** — robots.txt disallows the corresponding Letterboxd filter URLs |
-| A new data source | A function in `fetcher`. Nothing else may perform I/O |
+| A new data source | A function in `fetcher` on the `html` path, or in `client` on the `api` path. Nothing else may perform I/O |
+| A new watchlist source | A builder satisfying `build.Builder`, a `WATCHLIST_SOURCE` value, and a branch in `index.ts`. Never a flag inside an existing builder |
 | A new error reason | A row in § Error reasons plus the raising branch |
 | A new cache table or TTL | A row in § Store, with its rationale |
 | A new egress setting | A row in § Egress |

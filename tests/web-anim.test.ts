@@ -21,7 +21,6 @@ import { buildReel, ELIM_CELLS, eliminationOrder, mulberry32 } from "../src/web/
 
 const film = (n: number, poster: string | null = null): Film => ({
   lid: `l${n}`,
-  slug: `s${n}`,
   name: `Film ${n}`,
   year: 2000 + n,
   runtime: 90,

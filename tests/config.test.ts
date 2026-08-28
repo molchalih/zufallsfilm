@@ -8,6 +8,8 @@ test("defaults apply when env is empty", () => {
   expect(c.maxWatchlist).toBe(6000);
   expect(c.requestTimeoutMs).toBe(20_000);
   expect(c.buildBudgetMs).toBe(300_000);
+  // The behaviour this service already had: no new environment is needed.
+  expect(c.source).toBe("html");
   expect(c.trustProxy).toBe(false);
 });
 
@@ -27,6 +29,25 @@ test("egress proxy must be http, not socks", () => {
 test("config is frozen", () => {
   const c = loadConfig({});
   expect(Object.isFrozen(c)).toBe(true);
+});
+
+test("the watchlist source defaults to the site and is otherwise explicit", () => {
+  expect(loadConfig({ WATCHLIST_SOURCE: "" }).source).toBe("html");
+  expect(loadConfig({ WATCHLIST_SOURCE: "html" }).source).toBe("html");
+  expect(
+    loadConfig({ WATCHLIST_SOURCE: "api", LETTERBOXD_API_KEY: "k", LETTERBOXD_API_SECRET: "s" })
+      .source,
+  ).toBe("api");
+  expect(() => loadConfig({ WATCHLIST_SOURCE: "scrape" })).toThrow(/must be "html" or "api"/);
+});
+
+test("selecting the API without credentials fails at startup, not at the first request", () => {
+  expect(() => loadConfig({ WATCHLIST_SOURCE: "api" })).toThrow(/LETTERBOXD_API_KEY/);
+  expect(() => loadConfig({ WATCHLIST_SOURCE: "api", LETTERBOXD_API_KEY: "k" })).toThrow(
+    /LETTERBOXD_API_SECRET/,
+  );
+  // Credentials without the selection are inert: the site path still runs.
+  expect(loadConfig({ LETTERBOXD_API_KEY: "k", LETTERBOXD_API_SECRET: "s" }).source).toBe("html");
 });
 
 test("proxy trust is off unless it is declared, and is declared as a boolean", () => {

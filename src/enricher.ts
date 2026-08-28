@@ -24,10 +24,6 @@ export function searchUrl(name: string): string {
   );
 }
 
-export function filmPageUrl(slug: string): string {
-  return `https://letterboxd.com/film/${slug}/`;
-}
-
 export function parseIsoDuration(d: string): number | null {
   const m = /^PT(?:(\d+)H)?(?:(\d+)M)?$/.exec(d.trim());
   if (!m || (!m[1] && !m[2])) return null;
@@ -74,7 +70,9 @@ export function createEnricher(fetcher: Fetcher) {
   }
 
   async function fromFilmPage(film: Film): Promise<FilmMeta> {
-    const { body } = await fetcher.get(filmPageUrl(film.slug));
+    // `film.url` is the film's own page on the HTML path, which is the only
+    // path that reaches the enricher at all.
+    const { body } = await fetcher.get(film.url);
     const ld = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(body);
     let runtime: number | null = null;
     let rating: number | null = null;

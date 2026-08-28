@@ -23,7 +23,6 @@ import {
 
 const film = (n: number): Film => ({
   lid: `l${n}`,
-  slug: `s${n}`,
   name: `Film ${n}`,
   year: 2000 + n,
   runtime: 90 + n,

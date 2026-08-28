@@ -1,3 +1,5 @@
+import type { Builder, EnrichedFilm } from "./build";
+import { BuildError } from "./build";
 import type { Config } from "./config";
 import type { Enricher } from "./enricher";
 import type { Fetcher } from "./fetcher";
@@ -5,24 +7,6 @@ import { createMetrics, type Metrics } from "./metrics";
 import { parseTotal, parseWatchlistPage } from "./parser";
 import type { Store } from "./store";
 import type { Film } from "./types";
-
-export type BuildReason =
-  | "user_not_found"
-  | "watchlist_empty"
-  | "watchlist_too_large"
-  | "upstream_blocked"
-  | "upstream_timeout"
-  | "incomplete";
-
-export class BuildError extends Error {
-  readonly reason: BuildReason;
-
-  constructor(message: string, reason: BuildReason) {
-    super(message);
-    this.name = "BuildError";
-    this.reason = reason;
-  }
-}
 
 export const PAGE_SIZE = 28;
 export const PAGE_CONCURRENCY = 4;
@@ -58,7 +42,7 @@ export function createBuilder(deps: {
   metrics?: Metrics;
   // Injectable so tests can span multiple pages without 28-item fixtures.
   pageSize?: number;
-}) {
+}): Builder {
   const { fetcher, enricher, store, cfg } = deps;
   const now = deps.now ?? (() => Date.now());
   const metrics = deps.metrics ?? createMetrics();
@@ -172,7 +156,7 @@ export function createBuilder(deps: {
     }
   }
 
-  async function enrichEach(films: Film[], step: () => void) {
+  async function enrichEach(films: Film[], step: () => void): Promise<EnrichedFilm[]> {
     const metas = await mapLimit(films, ENRICH_CONCURRENCY, async (f) => {
       // Counted on the way out, whichever branch it takes: a cached hit is
       // progress too, and a miss that throws still finished being attempted.
@@ -272,5 +256,3 @@ export function createBuilder(deps: {
     },
   };
 }
-
-export type Builder = ReturnType<typeof createBuilder>;

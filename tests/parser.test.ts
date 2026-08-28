@@ -53,7 +53,7 @@ test("captured page yields 28 films with well-formed fields", async () => {
   expect(films).toHaveLength(28);
   for (const f of films) {
     expect(f.lid).toMatch(/^[A-Za-z0-9]+$/);
-    expect(f.slug).toMatch(/^[a-z0-9-]+$/);
+    expect(f.url).toMatch(/^https:\/\/letterboxd\.com\/film\/[a-z0-9-]+\/$/);
     expect(f.name.length).toBeGreaterThan(0);
     expect(f.name).not.toContain("&#");
     expect(f.name).not.toMatch(/\(\d{4}\)$/);

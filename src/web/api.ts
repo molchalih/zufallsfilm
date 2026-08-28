@@ -2,7 +2,6 @@ import { type Copy, copyFor, OFFLINE } from "./copy";
 
 export type Film = {
   lid: string;
-  slug: string;
   name: string;
   year: number | null;
   runtime: number | null;
