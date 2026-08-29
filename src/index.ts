@@ -30,9 +30,7 @@ const metrics = createMetrics();
 // One gate for whichever path is wired. Each path names its own ceiling: the
 // site is read four pages at a time under `GLOBAL_REQ_PER_SEC`, the API under
 // the rate its own terms give.
-const gate = createRateGate(
-  cfg.source === "api" ? cfg.apiReqPerSec : Number(process.env.GLOBAL_REQ_PER_SEC ?? 8),
-);
+const gate = createRateGate(cfg.source === "api" ? cfg.apiReqPerSec : cfg.globalReqPerSec);
 
 // Two builders, one contract. Only the selected path's collaborators are
 // constructed: the API path never builds a fetcher or an enricher, and the HTML
@@ -52,9 +50,9 @@ const builder: Builder =
       })();
 
 const limiter = createLimiter({
-  ratePerMin: Number(process.env.RATE_PER_MIN ?? 20),
-  burst: Number(process.env.RATE_BURST ?? 10),
-  distinctUsersPerWindow: Number(process.env.DISTINCT_USERS_PER_WINDOW ?? 15),
+  ratePerMin: cfg.ratePerMin,
+  burst: cfg.rateBurst,
+  distinctUsersPerWindow: cfg.distinctUsersPerWindow,
   windowMs: 60_000,
 });
 

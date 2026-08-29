@@ -60,3 +60,14 @@ test("proxy trust is off unless it is declared, and is declared as a boolean", (
   // Not silently false: a typo that disables a security control must be loud.
   expect(() => loadConfig({ TRUST_PROXY: "yes" })).toThrow(/must be true or false/);
 });
+
+test("a limit that is not a number is refused at startup, not silently ignored", () => {
+  for (const key of [
+    "GLOBAL_REQ_PER_SEC",
+    "RATE_PER_MIN",
+    "RATE_BURST",
+    "DISTINCT_USERS_PER_WINDOW",
+  ]) {
+    expect(() => loadConfig({ [key]: "fast" })).toThrow(new RegExp(key));
+  }
+});

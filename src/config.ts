@@ -20,6 +20,10 @@ export type Config = Readonly<{
   scrapeTtlMs: number;
   negativeTtlMs: number;
   trustProxy: boolean;
+  globalReqPerSec: number;
+  ratePerMin: number;
+  rateBurst: number;
+  distinctUsersPerWindow: number;
 }>;
 
 type Env = Record<string, string | undefined>;
@@ -71,6 +75,10 @@ export function loadConfig(env: Env): Config {
     scrapeTtlMs: num(env, "SCRAPE_TTL_MS", 7 * 24 * 60 * 60 * 1000),
     negativeTtlMs: num(env, "NEGATIVE_TTL_MS", 60 * 60 * 1000),
     trustProxy: bool(env, "TRUST_PROXY", false),
+    globalReqPerSec: num(env, "GLOBAL_REQ_PER_SEC", 8),
+    ratePerMin: num(env, "RATE_PER_MIN", 20),
+    rateBurst: num(env, "RATE_BURST", 10),
+    distinctUsersPerWindow: num(env, "DISTINCT_USERS_PER_WINDOW", 15),
   });
   // Refused here rather than on the first request: a server that answers
   // /health and fails every pick is harder to diagnose than one that will not
