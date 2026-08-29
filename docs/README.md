@@ -15,7 +15,7 @@ implementation is the authority on behaviour.
 | Area | State |
 |---|---|
 | `parser`, `picker`, `store`, `fetcher`, `enricher`, `builder`, `app` | Built, under `src/` |
-| `client`, `letterboxd`, `apiBuilder`: the official-API read path | Built, under `src/`. **Not the default.** Selected by `WATCHLIST_SOURCE=api`, which needs credentials and refuses to start without them. See DR-007 |
+| `client`, `letterboxd`, `apiBuilder`: the official-API read path | Built, under `src/`. Selected automatically when both credentials are present; `WATCHLIST_SOURCE` overrides. See DR-007 |
 | Cold-build model: page 1 served, remainder backfilled, builds coalesced | Built, on both paths |
 | Interface: idle, five reveal animations, result, error | Built, under `src/web/`. See DR-006 |
 | Runtime filter in the interface | **Not built, and not planned.** The design has no control for it; `maxRuntime` stays an API parameter. See `DESIGN.md` § Scope |

@@ -9,15 +9,18 @@ coalesced onto a single read.
 
 ## Where watchlists come from
 
-Two read paths, chosen by `WATCHLIST_SOURCE` and wired once at startup.
+Two read paths, wired once at startup. Credentials choose between them: with a
+key the official API is used, without one the site is read.
 
 | Value | Path | Needs |
 |---|---|---|
-| `html` (default) | Fetches the member's public watchlist pages and enriches each film for runtime, rating, poster and director | An outbound HTTP proxy where the origin refuses the deployment host |
+| `html` | Fetches the member's public watchlist pages and enriches each film for runtime, rating, poster and director | An outbound HTTP proxy where the origin refuses the deployment host |
 | `api` | Reads `GET /member/{id}/watchlist` from the official API, where each film already carries all four | `LETTERBOXD_API_KEY` and `LETTERBOXD_API_SECRET` |
 
-The default is the site: this service works today without any new environment,
-and nothing about that changes until the variable is set. Selecting `api`
+The API is the source this service prefers; reading the site is what it falls
+back to while no key exists. Supply both credentials and the API is used with no
+further configuration; supply neither and the site path runs exactly as it
+always has. `WATCHLIST_SOURCE` overrides the choice in either direction, and
 without credentials refuses to start rather than failing on the first request.
 See `docs/decisions/DR-007-official-api-as-an-alternate-source.md`.
 
@@ -80,10 +83,10 @@ and by CI. Only `tests/live.test.ts` touches the network, and it skips unless
 |---|---|---|
 | `PORT` | `3000` | Listen port |
 | `DB_PATH` | `data/picker.sqlite` | SQLite file |
-| `WATCHLIST_SOURCE` | `html` | `html` or `api`. See § Where watchlists come from |
+| `WATCHLIST_SOURCE` | credentials decide | `html` or `api`, overriding the automatic choice. See § Where watchlists come from |
 | `EGRESS_PROXY` | unset | `http://host:port`. SOCKS is not supported. `html` path only |
-| `LETTERBOXD_API_KEY` | unset | Required by `WATCHLIST_SOURCE=api`. Issued by Letterboxd with API access |
-| `LETTERBOXD_API_SECRET` | unset | Required by `WATCHLIST_SOURCE=api` |
+| `LETTERBOXD_API_KEY` | unset | Issued by Letterboxd with API access. Set with the secret, it selects the API path |
+| `LETTERBOXD_API_SECRET` | unset | The other half of the pair; one alone selects nothing |
 | `LETTERBOXD_API_BASE` | `https://api.letterboxd.com/api/v0` | Override, for testing |
 | `API_REQ_PER_SEC` | `8` | Outbound request ceiling, `api` path |
 | `TRUST_PROXY` | `false` | Read the caller's address from `X-Forwarded-For`. See § Inbound addresses |

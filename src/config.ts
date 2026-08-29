@@ -1,7 +1,7 @@
 /** Environment-derived configuration, validated once at startup. */
 
-/** Where watchlists are read from. `html` is the default and the behaviour this
- *  service has always had; `api` needs credentials and is selected explicitly. */
+/** Where watchlists are read from. Credentials decide: with a key the official
+ *  API is used, without one the site is read. `WATCHLIST_SOURCE` overrides. */
 export type WatchlistSource = "html" | "api";
 
 export type Config = Readonly<{
@@ -44,11 +44,15 @@ function bool(env: Env, key: string, fallback: boolean): boolean {
   throw new Error(`${key} must be true or false, got "${raw}"`);
 }
 
-function source(env: Env): WatchlistSource {
+function source(env: Env, credentialed: boolean): WatchlistSource {
   const raw = env.WATCHLIST_SOURCE;
-  if (raw === undefined || raw === "") return "html";
   if (raw === "html" || raw === "api") return raw;
-  throw new Error(`WATCHLIST_SOURCE must be "html" or "api", got "${raw}"`);
+  if (raw !== undefined && raw !== "") {
+    throw new Error(`WATCHLIST_SOURCE must be "html" or "api", got "${raw}"`);
+  }
+  // The API is the source this service prefers; reading the site is what it
+  // falls back to while no key exists.
+  return credentialed ? "api" : "html";
 }
 
 export function loadConfig(env: Env): Config {
@@ -59,13 +63,15 @@ export function loadConfig(env: Env): Config {
         `so the outbound proxy must expose an HTTP inbound. Got "${proxy}"`,
     );
   }
+  const apiKey = env.LETTERBOXD_API_KEY ?? "";
+  const apiSecret = env.LETTERBOXD_API_SECRET ?? "";
   const cfg = Object.freeze({
     port: num(env, "PORT", 3000),
     dbPath: env.DB_PATH ?? "data/picker.sqlite",
-    source: source(env),
+    source: source(env, apiKey !== "" && apiSecret !== ""),
     egressProxy: proxy,
-    apiKey: env.LETTERBOXD_API_KEY ?? "",
-    apiSecret: env.LETTERBOXD_API_SECRET ?? "",
+    apiKey,
+    apiSecret,
     apiBase: env.LETTERBOXD_API_BASE ?? "https://api.letterboxd.com/api/v0",
     apiReqPerSec: num(env, "API_REQ_PER_SEC", 8),
     maxWatchlist: num(env, "MAX_WATCHLIST", 6000),
@@ -86,7 +92,7 @@ export function loadConfig(env: Env): Config {
   if (cfg.source === "api" && (cfg.apiKey === "" || cfg.apiSecret === "")) {
     throw new Error(
       `WATCHLIST_SOURCE=api needs LETTERBOXD_API_KEY and LETTERBOXD_API_SECRET. ` +
-        `Unset WATCHLIST_SOURCE to read watchlists from the site instead.`,
+        `Unset it to read watchlists from the site instead.`,
     );
   }
   return cfg;

@@ -72,7 +72,7 @@ running process holds exactly one of them.
 | `picker` | `Film[]` + filter in, one `Film` out. Pure | Nothing |
 | `config` | Environment in, frozen `Config` out. Refuses a source it cannot serve | Nothing |
 
-Modules of the `html` path, selected by `WATCHLIST_SOURCE=html` (the default):
+Modules of the `html` path, which runs when no credentials are supplied:
 
 | Module | Responsibility | Depends on |
 |---|---|---|
@@ -81,7 +81,7 @@ Modules of the `html` path, selected by `WATCHLIST_SOURCE=html` (the default):
 | `enricher` | `Film[]` in, runtimes out. Search first, film page on miss | `fetcher` |
 | `builder` | Numbered pages against a declared total, plus enrichment | `fetcher`, `enricher`, `store` |
 
-Modules of the `api` path, selected by `WATCHLIST_SOURCE=api`:
+Modules of the `api` path, which runs when both credentials are supplied:
 
 | Module | Responsibility | Depends on |
 |---|---|---|

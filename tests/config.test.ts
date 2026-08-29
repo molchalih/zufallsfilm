@@ -46,8 +46,8 @@ test("selecting the API without credentials fails at startup, not at the first r
   expect(() => loadConfig({ WATCHLIST_SOURCE: "api", LETTERBOXD_API_KEY: "k" })).toThrow(
     /LETTERBOXD_API_SECRET/,
   );
-  // Credentials without the selection are inert: the site path still runs.
-  expect(loadConfig({ LETTERBOXD_API_KEY: "k", LETTERBOXD_API_SECRET: "s" }).source).toBe("html");
+  // A half-supplied pair does not silently select the API either.
+  expect(loadConfig({ LETTERBOXD_API_KEY: "k" }).source).toBe("html");
 });
 
 test("proxy trust is off unless it is declared, and is declared as a boolean", () => {
@@ -70,4 +70,17 @@ test("a limit that is not a number is refused at startup, not silently ignored",
   ]) {
     expect(() => loadConfig({ [key]: "fast" })).toThrow(new RegExp(key));
   }
+});
+
+test("credentials select the source when nothing overrides them", () => {
+  expect(loadConfig({}).source).toBe("html");
+  expect(loadConfig({ LETTERBOXD_API_KEY: "k" }).source).toBe("html");
+  expect(loadConfig({ LETTERBOXD_API_SECRET: "s" }).source).toBe("html");
+  expect(loadConfig({ LETTERBOXD_API_KEY: "k", LETTERBOXD_API_SECRET: "s" }).source).toBe("api");
+});
+
+test("an explicit source wins over the credentials", () => {
+  const keyed = { LETTERBOXD_API_KEY: "k", LETTERBOXD_API_SECRET: "s" };
+  expect(loadConfig({ ...keyed, WATCHLIST_SOURCE: "html" }).source).toBe("html");
+  expect(() => loadConfig({ WATCHLIST_SOURCE: "api" })).toThrow(/LETTERBOXD_API_KEY/);
 });

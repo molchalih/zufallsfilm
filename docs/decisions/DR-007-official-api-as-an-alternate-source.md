@@ -7,8 +7,8 @@ answers: why the official Letterboxd API is a second watchlist source rather tha
 **Status:** accepted, 2026-08-28
 
 Supplements DR-002, which chose reading the site over the API and CSV export.
-It does not supersede it: DR-002's reasoning stands, and its choice is still the
-default.
+It does not supersede it: DR-002's reasoning stands, and reading the site
+remains what this service does whenever no key is available.
 
 ## Context
 
