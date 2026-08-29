@@ -226,7 +226,7 @@ test("an unhandled throw becomes a 500, not a hang", async () => {
 });
 
 test("an unfiltered pick enriches one film, not the whole watchlist", async () => {
-  // Enriching a 1200-film watchlist to answer a request that returns one film
+  // Enriching a four-figure watchlist to answer a request that returns one film
   // takes longer than any proxy will hold the connection open.
   const pool = Array.from({ length: 500 }, (_, i) => ({
     lid: `l${i}`,

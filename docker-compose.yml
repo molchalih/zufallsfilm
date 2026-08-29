@@ -1,18 +1,8 @@
 services:
-  proxy:
-    image: ${EGRESS_PROXY_IMAGE}
-    restart: unless-stopped
-    volumes:
-      - ./proxy/config.json:/etc/proxy/config.json:ro
-    networks: [picker]
-
   app:
     build: .
     restart: unless-stopped
-    depends_on: [proxy]
     env_file: .env
-    environment:
-      EGRESS_PROXY: http://proxy:3128
     ports:
       - "3000:3000"
     volumes:

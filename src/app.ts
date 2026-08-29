@@ -126,8 +126,8 @@ export function createApp(deps: {
       const { films, partial } = await builder.getWatchlist(user);
       // A runtime filter has to know every runtime, so it pays for all of them.
       // An unfiltered pick does not: draw first, then enrich the one film the
-      // response carries. On a 1200-film watchlist that is one upstream call
-      // instead of 1200.
+      // response carries. On a four-figure watchlist that is one upstream call
+      // instead of a thousand.
       const pool =
         maxRuntime === undefined
           ? films.map((f) => ({ ...f, runtime: null }))

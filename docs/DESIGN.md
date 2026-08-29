@@ -23,7 +23,7 @@ optionally constrained by runtime.
 | Watchlist and film-metadata caching | Multi-user accounts, stored preferences |
 
 The interface is a client of the API and holds no privileges it does not.
-Anything it can do, `curl` can do. See DR-006.
+Anything it can do, `curl` can do. See DR-004.
 
 ## Measured constraints
 
@@ -35,7 +35,7 @@ Rows marked *derived* are computed from a measurement, not observed.
 |---|---|---|---|
 | Watchlist page size | 28 films; `perPage` ignored | 2 watchlists | — |
 | Page count | `ceil(total / 28)` | *derived* | — |
-| Watchlist total | `data-num-entries`, exact | 350 and 5269, both exact | Trust it as the integrity target |
+| Watchlist total | `data-num-entries`, exact | 2 watchlists, both exact | Trust it as the integrity target |
 | Item identity | `data-item-slug`, `data-item-name`, `data-postered-identifier` | 2 watchlists | `data-film-slug` no longer exists |
 | Attribute encoding | HTML-escaped. `data-postered-identifier` is **single-quoted** with `&quot;`-escaped JSON. `data-item-name` embeds `(YYYY)` | 2 watchlists | Decode entities and strip the year before searching. A `="`-matching parser finds zero `lid`s |
 | Poster URLs in watchlist HTML | Absent | 2 watchlists | Posters come from enrichment |
@@ -43,15 +43,15 @@ Rows marked *derived* are computed from a measurement, not observed.
 | Username case | Case-insensitive; three casings return the same watchlist | 3 casings | Lowercase at the API boundary or cache 3× |
 | Over-range page | HTTP 200, 0 items, `data-num-entries` still populated | 2 watchlists | 0 items is **not** proof of a markup break |
 | Plain watchlist pagination | HTTP 200, ~0.31 s, 133 KB | many | Viable |
-| `/watchlist/by/*`, `/watchlist/decade/*` | HTTP 403 **and** `Disallow` in robots.txt | — | Publisher directive, not just infrastructure. See DR-002 |
+| `/watchlist/by/*`, `/watchlist/decade/*` | HTTP 403 **and** `Disallow` in robots.txt | — | Publisher directive, not just infrastructure. See DR-001 |
 | `robots.txt` disallows | `/*/by/*`, `/*/decade/*`, `/*/genre/*`, `/*/country/*`, `/*/language/*` | — | Plain `/<user>/watchlist/` is **not** disallowed |
-| `api.letterboxd.com/api/v0/search` | HTTP 200, no key, no signature | many | See DR-002 for why this is a risk, not a feature |
+| `api.letterboxd.com/api/v0/search` | HTTP 200, no key, no signature | many | See DR-001 for why this is a risk, not a feature |
 | Search result pollution | `perPage` counts non-film items: `perPage=8` → 6 films | — | **`&include=FilmSearchItem` is mandatory**, and makes the endpoint ~3× faster |
 | Endpoints probed on `api.letterboxd.com` returning 401 | `/film/{id}`, `/films`, `/list`, `/lists`, `/member/{id}`, `/member/{id}/watchlist`, `/log-entries`, `/members`, `/news` | 19 probed | No watchlist route is reachable without a key |
 | Origin rate limit | HTTP 403 from `nginx`, no `Retry-After`, no challenge markers, **clears on retry** | 150 req | Transient. Must not be treated as a block |
 | CORS headers | None on any host probed | 3 hosts | A browser cannot call Letterboxd directly |
-| Hosts the origin refuses | HTTP 403 / 520 / 522 | 3 hosts | A deployment on such a host needs an outbound HTTP proxy |
-| Enrichment throughput (search, `include=FilmSearchItem`, concurrency 8) | 69 ms/film amortized | n=200 | 350 films ≈ 23 s |
+| Hosts the origin refuses | HTTP 403 / 520 / 522 | 3 hosts | A deployment on such a host needs an outbound HTTP proxy. See § Egress |
+| Enrichment throughput (search, `include=FilmSearchItem`, concurrency 8) | 69 ms/film amortized | n=200 | ~350 films ≈ 24 s |
 | Enrichment coverage (search only) | 99.2% resolve; 0.81% yield no runtime | n=742 adversarial | Failures are punctuation and non-Latin script — **not** duplicate titles, which are 0.0% |
 | Correct film's rank in search results | as low as index 7 of 8 | n=742 | `perPage=8` is at its limit, not comfortably above it |
 | Film page `/film/<slug>/` | HTTP 200. JSON-LD `duration`, `image`, `genre`, `countryOfOrigin`; `production:identifier` carries `lid` | n=120 | Exact by construction — no search, no ranking, no miss |
@@ -90,7 +90,7 @@ Modules of the `api` path, which runs when both credentials are supplied:
 | `apiBuilder` | The cursor walk. No enrichment: a watchlist read carries every field | `letterboxd`, `store` |
 
 Both builders satisfy `build.Builder`, and `index.ts` constructs exactly one.
-They are not generalised over each other — see DR-007 for why the two
+They are not generalised over each other — see DR-005 for why the two
 pagination models have no useful common ancestor.
 
 The interface lives under `src/web/` and depends on the API alone. It is
@@ -129,7 +129,7 @@ request that never reached the bundle, or by the client mid-spin.
 ### Build model
 
 A cold watchlist build is **not** performed inside a request. Measured cold cost:
-350 films ≈ 26 s; 5269 films ≈ 6 min. Both exceed common proxy timeouts (nginx
+~350 films ≈ 27 s; 5269 films ≈ 6 min. Both exceed common proxy timeouts (nginx
 60 s, Cloudflare 100 s), and a timed-out build discards all its upstream work.
 
 ```
@@ -157,7 +157,7 @@ film that never resolves would otherwise hold the bar short of the end forever.
 
 **Enrichment is scoped by the caller, not by the watchlist.** The scrape and
 the enrichment are separate costs, and only the scrape is bounded by the build
-model above. A completed 1200-film scrape whose films are not yet in the shared
+model above. A completed four-figure scrape whose films are not yet in the shared
 `film` table costs 80 s to enrich in full, which is past every proxy timeout in
 the paragraph above — so `builder.enrich` takes the films it is given and the
 route decides which those are:
@@ -168,7 +168,7 @@ route decides which those are:
 | `GET /pick` with `maxRuntime` | all, then the winner | A runtime filter has to know every runtime |
 | `GET /watchlist/:user` | the page returned | Enrich the page, not the watchlist behind it |
 
-Measured on a 1200-film watchlist with a cold `film` table: a 120-film page
+Measured on a watchlist of over a thousand films with a cold `film` table: a 120-film page
 took 15 s; a 60-film page, 7.6 s; both, warm, under 1 ms. The interface asks
 for 60.
 
@@ -193,7 +193,8 @@ wrote, and every row of the table above collapses to one request each.
 **Coalescing is mandatory, not an optimisation.** Concurrent cold requests for
 the same user must share one build, keyed on the lowercased username. Without
 it, ten requests for a 5269-film watchlist send ~52,000 upstream requests
-from a single address — the outcome the ceilings and the inbound rate limit exist to avoid.
+from a single address — the precise outcome the ceilings and the inbound rate
+limit exist to avoid.
 
 ## API contract
 
@@ -326,12 +327,12 @@ Rules the schema exists to enforce:
 
 ## Egress
 
-`fetcher` reads its proxy from configuration and knows nothing of what is
-behind it. Some hosts are refused by the origin, so an outbound HTTP proxy may
-be required; Bun's fetch takes `http://` and not SOCKS, so the proxy has to
-expose an HTTP inbound. The whole
+`fetcher` reads its proxy from configuration and knows nothing of what sits
+behind it. Some hosts are refused by the origin — see § Measured constraints —
+so a deployment on one of them needs an outbound HTTP proxy; Bun's fetch takes
+`http://` and not SOCKS, so the proxy has to expose an HTTP inbound. The whole
 section describes the `html` path; the `api` path issues no request to
-`letterboxd.com` and needs no exit, pacing its own calls at `API_REQ_PER_SEC`.
+`letterboxd.com` and needs no proxy, pacing its own calls at `API_REQ_PER_SEC`.
 
 | Setting | Value |
 |---|---|
@@ -367,10 +368,10 @@ structurally unable to detect loss: a review reproduced a **44% silent loss**
 
 | Requirement | Reason |
 |---|---|
-| Rate limit on **our** API, per inbound IP and per distinct username per window | Without it the service is an unauthenticated amplifier. Cold cost is `ceil(N/28)` page fetches plus one search per film absent from the global `film` cache: 348 upstream requests for a 350-film watchlist, 5,458 for a 5,269-film one. The global cache collapses the enrichment term at steady state, but **distinct usernames defeat both the cache and the coalescer**, and pagination alone is unavoidable per username |
+| Rate limit on **our** API, per inbound IP and per distinct username per window | Without it the service is an unauthenticated amplifier. Cold cost is `ceil(N/28)` page fetches plus one search per film absent from the global `film` cache: ~363 upstream requests for a ~350-film watchlist, 5,458 for a 5,269-film one. The global cache collapses the enrichment term at steady state, but **distinct usernames defeat both the cache and the coalescer**, and pagination alone is unavoidable per username |
 | Structured logs and metrics: parse yield, enrichment miss rate, 403 rate by class, scrape completeness | The 44% loss above would be invisible in production without them |
 | `film` row cap with LRU eviction | The table otherwise grows monotonically forever |
-| Global request ceiling toward Letterboxd | Politeness, and self-preservation of the exit IP |
+| Global request ceiling toward Letterboxd | Politeness, and self-preservation of the egress address |
 | The limiter's bucket per address is forgotten once it has refilled and its username window has cleared | A bucket in that state is indistinguishable from an address never seen, so dropping it changes no verdict. Kept forever, the map is unbounded memory an unauthenticated caller controls by varying its source address |
 | `X-Forwarded-For` is read only where `TRUST_PROXY` declares a proxy in front | Exposed directly, the header is caller-supplied: trusting it hands every caller a fresh bucket per request and the limiter above stops existing. Behind a proxy, ignoring it meters every visitor as the one address the proxy connects from |
 
@@ -378,7 +379,7 @@ structurally unable to detect loss: a review reproduced a **44% silent loss**
 
 | Layer | Method | Network |
 |---|---|---|
-| `parser` | Fixtures: normal page, over-range page, 0-entry watchlist, challenge page, entity-heavy titles, single-quoted identifier | None |
+| `parser` | Hand-authored fixtures: a full page, an over-range page, entity-heavy titles, the single-quoted identifier | None |
 | `picker` | Property test: result is drawn from the input and satisfies the filter | None |
 | `store` | In-memory SQLite: TTL boundaries, atomic replace, removed-film deletion | None |
 | `enricher` | Stubbed `fetcher`: search hit, search miss into film-page fallback, error-not-miss | None |

@@ -35,7 +35,7 @@ function props(t: number, poolSize = 40, winner = film(999)): AnimProps {
   return {
     reel: buildReel(pool, winner, 40, mulberry32(3)),
     pool,
-    total: 350,
+    total: 412,
     poolIndex: new Map(pool.map((f, i) => [f.lid, i] as const)),
     winnerPosition: 207,
     seed: 12345,
@@ -143,7 +143,7 @@ test("the void settles on the winner and parks its dot", () => {
   expect(f.title).toBe(p.reel.winner.name);
   expect(f.dot.left).toBe("78%");
   expect(f.dot.top).toBe("50%");
-  expect(f.index).toContain("350");
+  expect(f.index).toContain("412");
 });
 
 test("the void shows a pool film while it is still deciding", () => {

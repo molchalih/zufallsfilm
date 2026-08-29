@@ -59,8 +59,8 @@ export function loadConfig(env: Env): Config {
   const proxy = env.EGRESS_PROXY;
   if (proxy && !proxy.startsWith("http://") && !proxy.startsWith("https://")) {
     throw new Error(
-      `EGRESS_PROXY must be an http:// URL. Bun's fetch cannot use SOCKS proxies; ` +
-        `so the outbound proxy must expose an HTTP inbound. Got "${proxy}"`,
+      `EGRESS_PROXY must be an http:// URL. Bun's fetch cannot use SOCKS proxies, ` +
+        `so the outbound proxy has to expose an HTTP inbound. Got "${proxy}"`,
     );
   }
   const apiKey = env.LETTERBOXD_API_KEY ?? "";

@@ -102,7 +102,7 @@ export default {
   fetch: app.fetch,
   // Bun closes an idle connection after 10 s by default, which silently drops
   // a cold read: a complete scrape enriches every film it has not cached yet,
-  // and DESIGN.md measures that at 26 s for 350 films. 60 s is the nginx
+  // and DESIGN.md measures that at 27 s for ~350 films. 60 s is the nginx
   // timeout DESIGN.md § Build model already treats as the outer bound a
   // response must fit inside, so the server and the proxy agree on the limit.
   idleTimeout: 60,

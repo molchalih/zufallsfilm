@@ -217,7 +217,7 @@ test("unknown facts read as unknown, not as zero", () => {
 });
 
 test("positions pad to the width of the largest one", () => {
-  expect(padIndex(0, 350)).toBe("001");
-  expect(padIndex(41, 350)).toBe("042");
+  expect(padIndex(0, 412)).toBe("001");
+  expect(padIndex(41, 412)).toBe("042");
   expect(padIndex(0, 0)).toBe("1");
 });

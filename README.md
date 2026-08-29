@@ -22,20 +22,21 @@ back to while no key exists. Supply both credentials and the API is used with no
 further configuration; supply neither and the site path runs exactly as it
 always has. `WATCHLIST_SOURCE` overrides the choice in either direction, and
 without credentials refuses to start rather than failing on the first request.
-See `docs/decisions/DR-007-official-api-as-an-alternate-source.md`.
+See `docs/decisions/DR-005-official-api-as-an-alternate-source.md`.
 
 ## Requirements
 
-Bun 1.3.14. On the default path Letterboxd's origin refuses some hosts, so anything
-but local development needs an outbound HTTP proxy — see
-`docs/DESIGN.md`. The API path issues no request to
-`letterboxd.com` and needs no exit.
+Bun 1.3.14. On the `html` path Letterboxd's origin refuses requests from some
+hosts, answering 403, 520 or 522 rather than the page; a deployment on one of
+them needs `EGRESS_PROXY` pointed at an outbound HTTP proxy on a host it does
+not refuse. The `api` path issues no request to `letterboxd.com` and needs no
+proxy.
 
 ## Running
 
 ```bash
 bun install
-bun run src/index.ts          # direct egress, for development
+bun run src/index.ts          # direct egress
 ```
 
 In a container:
@@ -44,9 +45,6 @@ In a container:
 cp .env.example .env
 docker compose up -d --build
 ```
-
-The proxy's own configuration is deployment-specific and is not in this
-repository.
 
 ## API
 
@@ -70,7 +68,7 @@ Error responses carry a machine-readable `reason`; the full table is in
 ```bash
 bun run check      # typecheck, lint, bundle, tests
 bun test           # the whole suite, no network required
-LIVE=1 bun test    # adds the opt-in live smoke test
+LIVE=1 LIVE_MEMBER=<username> bun test   # adds the opt-in live smoke test
 ```
 
 `bun run check` is enforced by a pre-commit hook (`git config core.hooksPath .githooks`)
@@ -84,7 +82,7 @@ and by CI. Only `tests/live.test.ts` touches the network, and it skips unless
 | `PORT` | `3000` | Listen port |
 | `DB_PATH` | `data/picker.sqlite` | SQLite file |
 | `WATCHLIST_SOURCE` | credentials decide | `html` or `api`, overriding the automatic choice. See § Where watchlists come from |
-| `EGRESS_PROXY` | unset | `http://host:port`. SOCKS is not supported. `html` path only |
+| `EGRESS_PROXY` | unset | Outbound HTTP proxy, `http://host:port`. SOCKS is not supported. `html` path only |
 | `LETTERBOXD_API_KEY` | unset | Issued by Letterboxd with API access. Set with the secret, it selects the API path |
 | `LETTERBOXD_API_SECRET` | unset | The other half of the pair; one alone selects nothing |
 | `LETTERBOXD_API_BASE` | `https://api.letterboxd.com/api/v0` | Override, for testing |

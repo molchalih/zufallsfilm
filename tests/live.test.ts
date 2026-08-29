@@ -5,13 +5,15 @@ import { createEnricher } from "../src/enricher";
 import { createFetcher } from "../src/fetcher";
 import { openStore } from "../src/store";
 
-// Opt-in: requires working egress to letterboxd.com, direct or through EGRESS_PROXY.
+// Opt-in: needs working egress to letterboxd.com, direct or through
+// EGRESS_PROXY, and a member whose watchlist is public.
 const live = process.env.LIVE === "1" ? test : test.skip;
-const USER = process.env.LIVE_USER ?? "examplemember";
+const USER = process.env.LIVE_MEMBER;
 
 live(
   "builds a real watchlist end to end",
   async () => {
+    if (!USER) throw new Error("LIVE_MEMBER must name a member with a public watchlist");
     const cfg = loadConfig(process.env as Record<string, string | undefined>);
     const store = openStore(":memory:");
     const fetcher = createFetcher(cfg);

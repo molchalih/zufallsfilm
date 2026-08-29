@@ -2,7 +2,7 @@
 answers: why does this service scrape watchlist pages instead of using the official API or CSV exports
 ---
 
-# DR-002 — Obtain watchlists by scraping, not via the API or CSV export
+# DR-001 — Obtain watchlists by scraping, not via the API or CSV export
 
 **Status:** accepted, 2026-08-26
 

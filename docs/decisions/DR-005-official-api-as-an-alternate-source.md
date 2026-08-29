@@ -2,17 +2,17 @@
 answers: why the official Letterboxd API is a second watchlist source rather than the only one, and what selecting it changes
 ---
 
-# DR-007 — The official API as an alternate watchlist source
+# DR-005 — The official API as an alternate watchlist source
 
 **Status:** accepted, 2026-08-28
 
-Supplements DR-002, which chose reading the site over the API and CSV export.
-It does not supersede it: DR-002's reasoning stands, and reading the site
+Supplements DR-001, which chose reading the site over the API and CSV export.
+It does not supersede it: DR-001's reasoning stands, and reading the site
 remains what this service does whenever no key is available.
 
 ## Context
 
-DR-002 rejected the official API on availability — `GET /member/{id}/watchlist`
+DR-001 rejected the official API on availability — `GET /member/{id}/watchlist`
 answers 401 without a key, and a key is granted per consumer by application to
 Letterboxd, which was not something the project could assume. That constraint is
 about access, not about which source is better. Where a key exists, the API
@@ -20,10 +20,10 @@ answers the exact question this service asks, and answers it far more cheaply:
 
 | | `html` | `api` |
 |---|---|---|
-| Requests for a 350-film watchlist | 12 pages + 350 enrichments = 348 | 2 to resolve the member + 4 pages = 6 |
+| Requests for a ~350-film watchlist | 13 pages + ~350 enrichments = ~363 | 2 to resolve the member + 4 pages = 6 |
 | Runtime, rating, poster, director | One request per film, from search or the film page | Already on `FilmSummary` |
 | Pagination | Numbered pages against `data-num-entries`, four at a time | A sequential cursor, no reliable total |
-| Egress | May need an outbound HTTP proxy | Any host |
+| Egress | May need an outbound HTTP proxy, since the origin refuses some hosts | Any host |
 | Failure surface | Cloudflare challenges, markup drift, silent partial pages | Documented status codes |
 
 ## Decision
@@ -57,9 +57,8 @@ Selecting `api` changes these, and only these:
   directors, so `Builder.enrich` on this path reads the `film` table the walk
   itself wrote and issues no request at all. The measured 69 ms per uncached
   film disappears, and so does the film-page fallback.
-- No request is made to `letterboxd.com`, so `EGRESS_PROXY` is
-  unused. An outbound proxy is a requirement of the `html`
-  path only.
+- No request is made to `letterboxd.com`, so `EGRESS_PROXY` is unused. An
+  outbound proxy is a requirement of the `html` path only.
 - `watchlist_private` becomes reachable: the API returns a documented 403 for a
   private watchlist, which is the positive signal `DESIGN.md` § Error reasons
   requires and the HTML path has never had.

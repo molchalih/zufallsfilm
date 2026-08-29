@@ -1,6 +1,15 @@
 {
   "name": "letterboxd-picker",
+  "version": "1.0.0",
   "private": true,
+  "description": "An HTTP API and web interface that return a random film from a public Letterboxd watchlist, optionally filtered by runtime.",
+  "license": "MIT",
+  "author": "molchalih",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/molchalih/zufallsfilm.git"
+  },
+  "homepage": "https://github.com/molchalih/zufallsfilm",
   "type": "module",
   "scripts": {
     "dev": "NODE_ENV=development bun --hot src/index.ts",

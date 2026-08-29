@@ -56,4 +56,4 @@ compile error. The gate builds it once so that failure happens here instead.
 |---|---|
 | A behaviour change arrives with the test that would have caught its absence | The suite runs in under a second; there is no cost argument for skipping it |
 | Only `tests/live.test.ts` may touch the network, and it skips unless `LIVE=1` | A broken outbound path must never be able to fail the suite |
-| Fixtures under `tests/fixtures/` are captured, never hand-written, except where a test pins exact encoding behaviour | Hand-written HTML agrees with the parser by construction and proves nothing about the live site |
+| Fixtures under `tests/fixtures/` are hand-authored, never captured from a live response | A captured page carries a real member's account, their films and whatever else the origin put on it, none of which belongs in a public repository. A fixture holds the attributes the parser reads and nothing else |

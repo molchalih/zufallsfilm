@@ -2,13 +2,13 @@
 answers: why the interface is a React SPA served by Bun's own bundler, and why the pick still happens on the server
 ---
 
-# DR-006 — Serve the interface as a React SPA from Bun's bundler
+# DR-004 — Serve the interface as a React SPA from Bun's bundler
 
 **Status:** accepted, 2026-08-27
 
 ## Context
 
-DR-005 chose Hono for an API with no user interface, and `DESIGN.md` § Scope
+DR-003 chose Hono for an API with no user interface, and `DESIGN.md` § Scope
 put "any user interface" out of scope for that iteration. There is now a
 design: an idle field, five reveal animations, a result, and an error page.
 

@@ -2,7 +2,7 @@
 answers: why does this service run on Bun rather than Node or an edge runtime
 ---
 
-# DR-004 — Run on Bun
+# DR-002 — Run on Bun
 
 **Status:** accepted, 2026-08-26
 
@@ -15,7 +15,7 @@ SQLite, and a proxy-aware fetch.
 |---|---|
 | Bun | SQLite and a test runner built in |
 | Node | Viable; mature SOCKS5 ecosystem |
-| Cloudflare Workers | Cannot open an outbound proxy connection, which DR-001 requires |
+| Cloudflare Workers | Cannot open an outbound proxy connection, which the `html` path may need |
 
 | Setting | Value |
 |---|---|
@@ -28,8 +28,9 @@ Bun as the runtime, with `bun:sqlite` for the store.
 ## Consequences
 
 - `bun:sqlite` and the test runner are built in, so the dependency tree stays small.
-- Bun's fetch constrains the proxy protocol to HTTP. See DR-003.
-- Reversing this decision is possible without reversing DR-005.
+- Bun's fetch supports HTTP proxies and not SOCKS, so `EGRESS_PROXY` must be
+  an `http://` URL and the outbound has to expose an HTTP inbound.
+- Reversing this decision is possible without reversing DR-003.
 
 ## Rejected alternatives
 

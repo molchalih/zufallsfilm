@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { decodeEntities, parseTotal, parseWatchlistPage } from "../src/parser";
 
 const HANDMADE = `
-<div data-num-entries="350"></div>
+<div data-num-entries="412"></div>
 <li class="griditem">
   <div class="react-component" data-component-class="LazyPoster"
     data-item-name="Ivan&#039;s Childhood (1962)"
@@ -43,12 +43,12 @@ test("leaves year null when the name carries none", () => {
 });
 
 test("parseTotal reads data-num-entries", () => {
-  expect(parseTotal(HANDMADE)).toBe(350);
+  expect(parseTotal(HANDMADE)).toBe(412);
   expect(parseTotal("<div></div>")).toBeNull();
 });
 
-test("captured page yields 28 films with well-formed fields", async () => {
-  const html = await Bun.file("tests/fixtures/page-normal.html").text();
+test("a full watchlist page yields 28 films with well-formed fields", async () => {
+  const html = await Bun.file("tests/fixtures/watchlist-page.html").text();
   const films = parseWatchlistPage(html);
   expect(films).toHaveLength(28);
   for (const f of films) {
@@ -62,7 +62,7 @@ test("captured page yields 28 films with well-formed fields", async () => {
 });
 
 test("over-range page parses to zero films but still reports a total", async () => {
-  const html = await Bun.file("tests/fixtures/page-overrange.html").text();
+  const html = await Bun.file("tests/fixtures/watchlist-page-overrange.html").text();
   expect(parseWatchlistPage(html)).toHaveLength(0);
   expect(parseTotal(html)).toBeGreaterThan(0);
 });

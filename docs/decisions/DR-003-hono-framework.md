@@ -2,16 +2,16 @@
 answers: why Hono as the HTTP framework rather than Elysia or Next.js
 ---
 
-# DR-005 — Use Hono as the HTTP framework
+# DR-003 — Use Hono as the HTTP framework
 
 **Status:** accepted, 2026-08-26
 
 ## Context
 
-The service is an HTTP API with no user interface in this iteration. DR-004
-selects Bun, whose fetch has already proven constrained in one respect
-(DR-003), so the ability to change runtime without changing framework has
-demonstrated value.
+The service is an HTTP API with no user interface in this iteration. DR-002
+selects Bun, whose fetch has already proven constrained in one respect — it
+takes HTTP proxies and not SOCKS — so the ability to change runtime without
+changing framework has demonstrated value.
 
 ## Decision
 
@@ -19,9 +19,9 @@ Hono, running on `Bun.serve`.
 
 ## Consequences
 
-- Runs unmodified on Node, so the DR-003 fallback is a runtime swap rather than
-  a rewrite.
-- This decision survives DR-004 being reversed, and vice versa.
+- Runs unmodified on Node, so a runtime that fits the egress better is a swap
+  rather than a rewrite.
+- This decision survives DR-002 being reversed, and vice versa.
 
 ## Rejected alternatives
 

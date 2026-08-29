@@ -135,7 +135,7 @@ export function createBuilder(deps: {
    * Enrichment is the expensive half of a build — DESIGN.md measures 69 ms per
    * uncached film — so the caller decides its scope. Enriching a whole
    * watchlist to answer a request that returns one page of it costs 80 s on a
-   * 1200-film watchlist, which no proxy will hold open.
+   * four-figure watchlist, which no proxy will hold open.
    */
   async function enrich(rawUsername: string, films: Film[]) {
     // Normalised on both sides, or a caller that has not lowercased yet files
