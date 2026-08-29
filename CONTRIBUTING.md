@@ -22,7 +22,6 @@ it is not published.
 | Types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`, `revert` | A closed set. A change that fits none of them is usually two changes |
 | The body is empty | A commit body is invisible from `git log --oneline`, from the file, and from the review, so it is the wrong home for anything a reader needs later. Architectural reasoning belongs in `docs/decisions/DR-<n>-<slug>.md`, measured facts in `docs/DESIGN.md`, and the narrative of a change in the pull request that carries it |
 | The commits before this policy do not follow it, and never will | `main` is published, and § Merging forbids rewriting it. The boundary is a fact about the history, not a defect to repair |
-| The subject carries the whole change | A commit message describes what changed and nothing else |
 | A commit that only fixes the previous commit should be amended into it before pushing | Two commits that describe one change are one commit that has not been finished |
 
 ## Gate
