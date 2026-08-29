@@ -28,15 +28,16 @@ answers the exact question this service asks, and answers it far more cheaply:
 
 ## Decision
 
-Both paths exist. `WATCHLIST_SOURCE` picks one at startup, and the default is
-`html`.
+Both paths exist. The credentials pick one at startup: with a key and secret the
+API is used, without them the site is read. `WATCHLIST_SOURCE` overrides the
+choice in either direction.
 
-The default is not a preference between the two — it is that this service runs
-today, unattended, with no credentials, and a release that changed which
-upstream it talks to on nothing but an upgrade would be a change nobody asked
-for. Selecting `api` is a deliberate act, and the configuration refuses to start
-without the credentials it needs rather than serving `/health` happily and
-failing every pick.
+The API is the preferred source and reading the site is the fallback, so the
+configuration says so rather than making an operator name the source twice. A
+credential pair is not something an environment acquires by accident — supplying
+it is the deliberate act, and a half-supplied pair selects nothing. Forcing
+`api` without credentials refuses to start rather than serving `/health` happily
+and failing every pick.
 
 They are two builders, not one builder with a flag. The pagination models have
 no useful common ancestor: one computes its page count up front and fetches four
@@ -80,7 +81,7 @@ something both paths can produce.
 | Alternative | Why rejected |
 |---|---|
 | Make the API the only source, deleting the HTML path | Ends the service the moment a key lapses, and throws away a working path to gain nothing the flag does not already give |
-| Make the API the default when credentials happen to be present | An upgrade would silently change which upstream a running deployment talks to. Presence of a credential is not an instruction to use it |
+| Keep `html` the default and require `WATCHLIST_SOURCE=api` as well | Makes an operator state the same intent twice, and leaves a deployment that has been granted a key still reading the site until someone notices the second variable. The credential is the intent |
 | One builder generalised over both pagination models | The abstraction that fits both is "ask for more until there is no more", which discards the declared total the HTML path needs to detect silent loss and the cursor bookkeeping the API path needs to detect a walk that cannot finish |
 | Fall back from `api` to `html` on failure | A fallback makes every failure two failures deep and doubles the surface a reader has to hold. The paths also disagree on what "complete" means, so a fallback would silently change the completeness rule mid-request |
 | Fail on the first request instead of at startup | A server that answers `/health` and fails every pick is harder to diagnose than one that will not start, and the credentials are knowable at boot |
