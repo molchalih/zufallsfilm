@@ -155,6 +155,19 @@ test("watchlist responses are paginated", async () => {
   expect(body.films[0].lid).toBe("b");
 });
 
+test("an oversized perPage is clamped to the enrich cap, not honoured", async () => {
+  const app = createApp({
+    builder: okBuilder as any,
+    store: openStore(":memory:"),
+    cfg,
+    limiter: limiter(),
+    metrics: createMetrics(),
+  });
+  // 500 uncached films behind one 8/s gate is >60 s of unbudgeted queueing.
+  const body = await json(await app.request("/watchlist/u?perPage=500"));
+  expect(body.perPage).toBe(100);
+});
+
 test("a film carries its poster and rating, and says so when it has neither", async () => {
   const app = createApp({
     builder: {

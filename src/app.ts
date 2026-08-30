@@ -158,7 +158,12 @@ export function createApp(deps: {
     if (!gate.ok) return c.json({ error: true, reason: `throttled_${gate.reason}` }, 429);
 
     const page = Math.max(1, Number(c.req.query("page") ?? 1) || 1);
-    const perPage = Math.min(500, Math.max(1, Number(c.req.query("perPage") ?? 100) || 100));
+    // Capped at 100, not 500: every uncached film in the window queues behind
+    // the one global `GLOBAL_REQ_PER_SEC` gate (8/s), and `buildBudgetMs`
+    // covers `scrapeOnce` only — the enrich pass that follows is unbudgeted, so
+    // a 500-film window is >60 s of queueing that only the edge timeout ends.
+    // 100 bounds that at ~12 s; the site's own client asks for POOL_PAGE_SIZE.
+    const perPage = Math.min(100, Math.max(1, Number(c.req.query("perPage") ?? 100) || 100));
     try {
       const { films, complete, partial } = await builder.getWatchlist(user);
       const start = (page - 1) * perPage;
