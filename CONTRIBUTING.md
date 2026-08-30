@@ -49,6 +49,51 @@ own: `Bun.serve` bundles `index.html` at boot, so a broken import or an
 unparseable stylesheet is a runtime failure on the first request rather than a
 compile error. The gate builds it once so that failure happens here instead.
 
+## Release
+
+`ci.yml` does two things, not one: the `check` job above gates a `release` job that runs only on a
+push to `main`. There is no separate deploy step and nothing to run by hand.
+
+| Stage | What happens |
+|---|---|
+| `check` | The full gate. It **gates** `release` via `needs:` — no green, no image |
+| `release` | Builds the container, pushes `ghcr.io/molchalih/zufallsfilm:main` + `:sha-<sha>`, and **keyless-cosign-signs the digest** |
+| deployment | The host resolves `:main` to an immutable digest, **cosign-verifies that digest**, and rolls the container. Typically live within ~35 minutes |
+
+Pushing to `main` therefore ships to production. Nothing else is required, and nothing else is
+possible: the deployment refuses any image it cannot verify.
+
+### The workflow filename and branch are load-bearing
+
+The deployment pins the signing identity as a regexp:
+
+```
+^https://github\.com/molchalih/zufallsfilm/\.github/workflows/ci\.yml@refs/heads/main$
+```
+
+**Renaming `.github/workflows/ci.yml`, moving the release job into another workflow file, or changing
+the default branch will break production deploys** — and it breaks them *silently*: images keep
+building and signing, verification simply stops matching, and the running version quietly stops
+advancing. Any such change has to land together with the matching change on the deployment side.
+
+The last step of `release` re-runs that exact regexp against the digest it just signed, so this drift
+fails the build here instead of going unnoticed. Do not delete it, and keep the regexp in it identical
+to the one above.
+
+### Signing and concurrency
+
+The signature is on the **digest**, never on the `:main` tag — the deployment verifies the digest it
+resolved, so a signature bound to a moving tag would prove nothing about what actually runs.
+
+Pull requests cancel superseded runs; pushes to `main` deliberately **do not**. A cancellation between
+the image push and the signing step would publish an unsigned digest, which the deployment then
+refuses. `:main` is also guarded with `enable={{is_default_branch}}` so no other branch can move the
+channel.
+
+Actions are pinned by commit SHA rather than by tag. A mutable tag on a third-party action is a
+supply-chain hole, and major-version tags are not always published — `cosign-installer` has none,
+which is how the first release run failed.
+
 ## Tests
 
 | Rule | Rationale |

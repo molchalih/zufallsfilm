@@ -115,4 +115,5 @@ a client-supplied value is no safer than trusting the client.
 ## Documentation
 
 `docs/README.md` routes to the rest and records what is built and what is open.
-`CONTRIBUTING.md` covers branching, commit style and the merge policy.
+`CONTRIBUTING.md` covers branching, commit style, the merge policy, and **§Release** — how a push to
+`main` builds, signs and ships this service, and why the workflow's filename is load-bearing.
