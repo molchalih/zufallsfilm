@@ -1,8 +1,9 @@
-import type { Builder, EnrichedFilm } from "./build";
+import type { Builder, BuildReason, EnrichedFilm } from "./build";
 import { BuildError } from "./build";
 import type { Config } from "./config";
 import type { Enricher } from "./enricher";
-import type { Fetcher } from "./fetcher";
+import type { Classification, Fetcher } from "./fetcher";
+import { FetchError } from "./fetcher";
 import { createMetrics, type Metrics } from "./metrics";
 import { parseTotal, parseWatchlistPage } from "./parser";
 import type { Store } from "./store";
@@ -55,9 +56,32 @@ export function createBuilder(deps: {
   // reset the first's count. Cleared when the last job for the user finishes.
   const progress = new Map<string, { done: number; total: number; jobs: number }>();
 
+  // A transport-layer failure must never reach the API as a bare FetchError: app.ts only maps
+  // BuildError, so anything else fell through to a blanket 502 whose JSON Cloudflare then replaced
+  // with its own error page — the caller saw neither a status nor a reason it could act on
+  // (measured 2026-08-30). apiBuilder.ts already translates; this is the same contract on the html
+  // path.
+  const CLASS_TO_REASON: Partial<Record<Classification, BuildReason>> = {
+    forbidden: "watchlist_private",
+    challenge: "upstream_blocked",
+    timeout: "upstream_timeout",
+    ratelimit: "upstream_error",
+  };
+
+  function asBuildError(e: unknown, username: string): never {
+    if (e instanceof BuildError) throw e;
+    if (e instanceof FetchError) {
+      throw new BuildError(
+        `${e.message} (watchlist for ${username})`,
+        CLASS_TO_REASON[e.classification] ?? "upstream_error",
+      );
+    }
+    throw new BuildError(e instanceof Error ? e.message : String(e), "upstream_error");
+  }
+
   // Fetch page 1 only: enough for a pick, and fast.
   async function firstPage(username: string): Promise<Seed> {
-    const first = await fetcher.get(pageUrl(username, 1));
+    const first = await fetcher.get(pageUrl(username, 1)).catch((e) => asBuildError(e, username));
     if (first.classification === "notfound") {
       throw new BuildError(`No such member: ${username}`, "user_not_found");
     }

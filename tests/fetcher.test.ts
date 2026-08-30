@@ -26,6 +26,30 @@ test("a bare nginx 403 is a transient rate limit, not a challenge", () => {
   expect(classifyResponse(403, body, H())).toBe("ratelimit");
 });
 
+test("Letterboxd's OWN 403 page is permanent, not a transient rate limit", () => {
+  // /jack and /crew answer with this (measured 2026-08-30). Retrying it burned three round-trips and
+  // then threw, which surfaced to the caller as a blanket 502.
+  const body =
+    "<html><head><title>Letterboxd - Forbidden</title></head><body>Forbidden</body></html>";
+  expect(classifyResponse(403, body, H())).toBe("forbidden");
+});
+
+test("a forbidden page is NOT retried — it throws on the first attempt", async () => {
+  let n = 0;
+  const stub = (async () => {
+    n++;
+    return new Response(
+      "<html><head><title>Letterboxd - Forbidden</title></head><body>x</body></html>",
+      { status: 403 },
+    );
+  }) as unknown as typeof fetch;
+  const f = createFetcher(cfg, stub, noSleep);
+  await expect(f.get("https://letterboxd.com/jack/watchlist/page/1/")).rejects.toMatchObject({
+    classification: "forbidden",
+  });
+  expect(n).toBe(1);
+});
+
 test("the English challenge string alone does not classify", () => {
   // Challenge pages are localised; only the marker is language-independent.
   expect(classifyResponse(403, "Just a moment...", H())).toBe("ratelimit");

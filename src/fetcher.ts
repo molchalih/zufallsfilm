@@ -1,6 +1,13 @@
 import type { Config } from "./config";
 
-export type Classification = "ok" | "challenge" | "ratelimit" | "notfound" | "timeout" | "error";
+export type Classification =
+  | "ok"
+  | "challenge"
+  | "ratelimit"
+  | "forbidden"
+  | "notfound"
+  | "timeout"
+  | "error";
 
 export class FetchError extends Error {
   readonly classification: Classification;
@@ -20,6 +27,10 @@ export function classifyResponse(status: number, body: string, headers: Headers)
   if (body.includes("_cf_chl_opt") || headers.get("cf-mitigated")) return "challenge";
   if (status === 200) return "ok";
   if (status === 404) return "notfound";
+  // Letterboxd's OWN 403 page is a permanent per-member verdict (a watchlist we may not read), not
+  // the transient edge/nginx 403 below it. Retrying it burns three round-trips and then throws, which
+  // the API layer turned into a blanket 502 — measured on /jack and /crew, 2026-08-30.
+  if (status === 403 && body.includes("Letterboxd - Forbidden")) return "forbidden";
   if (status === 403 || status === 429 || status >= 500) return "ratelimit";
   return "error";
 }
@@ -83,8 +94,9 @@ export function createFetcher(
       const body = await res.text();
       const c = classifyResponse(res.status, body, res.headers);
       if (c === "ok" || c === "notfound") return { status: res.status, body, classification: c };
-      // A challenge does not clear on retry; a rate limit does.
+      // Neither a challenge nor a permanent 403 clears on retry; a rate limit does.
       if (c === "challenge") throw new FetchError(`Blocked by challenge: ${url}`, "challenge");
+      if (c === "forbidden") throw new FetchError(`Forbidden by upstream: ${url}`, "forbidden");
       last = c;
       if (attempt < 2) {
         await sleep(delay);

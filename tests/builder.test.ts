@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
+import type { BuildReason } from "../src/build";
+import { BuildError } from "../src/build";
 import { createBuilder, pageUrl } from "../src/builder";
 import { loadConfig } from "../src/config";
+import { FetchError } from "../src/fetcher";
 import { openStore } from "../src/store";
 
 const cfg = loadConfig({ MAX_WATCHLIST: "100" });
@@ -33,6 +36,32 @@ function fetcherFor(pages: Record<number, string>, onGet?: (u: string) => void) 
     },
   };
 }
+
+// A FetchError reaching the API as-is is what produced the blanket 502 Cloudflare then replaced with
+// its own error page: app.ts maps BuildError only. Each class must arrive already translated.
+test("a fetch failure surfaces as a BuildError with the matching reason", async () => {
+  const cases: Array<[string, BuildReason]> = [
+    ["forbidden", "watchlist_private"],
+    ["challenge", "upstream_blocked"],
+    ["timeout", "upstream_timeout"],
+    ["ratelimit", "upstream_error"],
+  ];
+  for (const [classification, reason] of cases) {
+    const b = createBuilder({
+      fetcher: {
+        async get() {
+          throw new FetchError("upstream said no", classification as any);
+        },
+      } as any,
+      enricher: enricher as any,
+      store: openStore(":memory:"),
+      cfg,
+    });
+    const err = await b.getWatchlist("u").catch((e) => e);
+    expect(err).toBeInstanceOf(BuildError);
+    expect((err as BuildError).reason).toBe(reason);
+  }
+});
 
 test("page URLs always carry a trailing slash", () => {
   expect(pageUrl("u", 3)).toBe("https://letterboxd.com/u/watchlist/page/3/");
