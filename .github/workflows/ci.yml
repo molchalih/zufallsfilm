@@ -19,6 +19,13 @@ on:
 permissions:
   contents: read
 
+# A superseded push must not race the one before it: two in-flight runs can leave `:main` pointing at
+# the OLDER digest. PRs cancel freely; a push to main does NOT, because cancelling between the image
+# push and the cosign sign would publish an unsigned digest the fleet then refuses.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   IMAGE: ghcr.io/molchalih/zufallsfilm
 
@@ -58,8 +65,8 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           tags: |
-            type=raw,value=main
-            type=sha,prefix=sha-
+            type=raw,value=main,enable={{is_default_branch}}
+            type=sha,prefix=sha-,format=long
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       - uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         id: build
@@ -74,3 +81,14 @@ jobs:
       # resolved, so a signature bound to `:main` would prove nothing about it.
       - name: Cosign sign (keyless)
         run: cosign sign --yes ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+
+      # Prove the signature the FLEET will check, with its exact pinned regexp
+      # (zufallsfilm_podman_cosign_identity_regexp). Verification on the fleet is fail-closed, so any
+      # drift in this workflow's filename or branch would otherwise surface only as a silently
+      # un-deployable image. This turns that into a red build here.
+      - name: Verify the signature the fleet will check
+        run: |
+          cosign verify \
+            --certificate-identity-regexp '^https://github\.com/molchalih/zufallsfilm/\.github/workflows/ci\.yml@refs/heads/main$' \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
