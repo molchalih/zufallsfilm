@@ -77,7 +77,7 @@ test("robots keeps crawlers off every route that reaches Letterboxd", async () =
   // The interface and the preview card are what a shared link resolves to, so
   // a blanket disallow here would cost the site its own listing and its card.
   expect(body).not.toContain("Disallow: /\n");
-  expect(body).not.toContain("Disallow: /og.png");
+  expect(body).not.toContain("Disallow: /og-red.png");
 });
 
 test("responses carry a policy, and none that blocks the card cross-origin", async () => {
@@ -89,7 +89,7 @@ test("responses carry a policy, and none that blocks the card cross-origin", asy
     metrics: createMetrics(),
   });
 
-  const res = await app.request("/og.png");
+  const res = await app.request("/og-red.png");
   expect(res.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
   expect(res.headers.get("x-content-type-options")).toBe("nosniff");
   // Hono defaults this to same-origin, which stops a messenger's own client
@@ -280,7 +280,7 @@ test("the preview card is served as a real PNG at the path the meta tag names", 
     metrics: createMetrics(),
   });
 
-  const res = await app.request("/og.png");
+  const res = await app.request("/og-red.png");
   expect(res.status).toBe(200);
   expect(res.headers.get("content-type")).toBe("image/png");
 
@@ -291,7 +291,7 @@ test("the preview card is served as a real PNG at the path the meta tag names", 
   expect(Array.from(bytes.slice(0, 4))).toEqual([0x89, 0x50, 0x4e, 0x47]);
 
   const html = await Bun.file(new URL("../index.html", import.meta.url)).text();
-  expect(html).toContain('content="https://zufalls.film/og.png"');
+  expect(html).toContain('content="https://zufalls.film/og-red.png"');
 });
 
 test("an unhandled throw becomes a 500, not a hang", async () => {

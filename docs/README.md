@@ -21,7 +21,7 @@ implementation is the authority on behaviour.
 | Runtime filter in the interface | **Not built, and not planned.** The design has no control for it; `maxRuntime` stays an API parameter. See `DESIGN.md` § Scope |
 | Outbound proxy for the `html` path | Optional, one setting: `EGRESS_PROXY`. See `../README.md` § Configuration |
 | `watchlist_private` detection on the `html` path | Built. The marker is measured: `fetcher` classifies Letterboxd's own `Letterboxd - Forbidden` 403 page, and `builder` maps it to `watchlist_private`. A bare 403 remains a transient rate limit, so privacy is still never inferred from the status alone. See `DESIGN.md` § Measured constraints |
-| Link preview card, crawl rules and security headers | Built. `/og.png` and the Open Graph tags in `index.html`; `robots.txt` keeps crawlers off the routes that reach Letterboxd. The interface's own policy is set by the TLS terminator, not by this service. See `../README.md` § Security headers |
+| Link preview card, crawl rules and security headers | Built. `/og-red.png` and the Open Graph tags in `index.html`; `robots.txt` keeps crawlers off the routes that reach Letterboxd. The interface's own policy is set by the TLS terminator, not by this service. See `../README.md` § Security headers |
 
 ## Ownership table
 

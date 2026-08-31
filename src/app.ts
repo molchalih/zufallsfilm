@@ -12,7 +12,7 @@ import { errorPage } from "./web/errorPage";
 // Resolved by the runtime to an absolute path, so the route does not depend on
 // the working directory the process was started from. The file ships because
 // the Dockerfile copies `src` wholesale; a `public/` directory would not.
-import ogImagePath from "./web/og.png" with { type: "file" };
+import ogImagePath from "./web/og-red.png" with { type: "file" };
 
 type ErrorStatus = 400 | 403 | 404 | 413 | 429 | 502 | 504;
 
@@ -86,7 +86,7 @@ export function createApp(deps: {
       strictTransportSecurity: "max-age=31536000; includeSubDomains",
       xFrameOptions: "DENY",
       // Left off: it defaults to `same-origin`, and a messenger rendering the
-      // preview card in its own client loads `/og.png` cross-origin.
+      // preview card in its own client loads `/og-red.png` cross-origin.
       crossOriginResourcePolicy: false,
     }),
   );
@@ -134,7 +134,7 @@ export function createApp(deps: {
   // absolute URL because a crawler resolves nothing relative, so this path is
   // hard-coded on both sides and has to stay in step with the meta tag.
   // Outside the limiter: a crawler fetching it is not a watchlist read.
-  app.get("/og.png", (c) =>
+  app.get("/og-red.png", (c) =>
     c.body(Bun.file(ogImagePath).stream(), 200, {
       "Content-Type": "image/png",
       "Cache-Control": "public, max-age=604800",

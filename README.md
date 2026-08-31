@@ -55,7 +55,7 @@ docker compose up -d --build
 | `GET /pick` | `user` (required), `maxRuntime` (optional, minutes) | One film, plus `partial` and `pool` |
 | `GET /watchlist/:user` | `page`, `perPage` (default 100, max 100) | `{count, complete, partial, films[]}` |
 | `GET /metrics` | — | Counters and observations |
-| `GET /og.png` | — | The 1200x630 link preview card |
+| `GET /og-red.png` | — | The 1200x630 link preview card |
 | `GET /robots.txt` | — | Crawl rules. See § Security headers |
 
 ```bash
@@ -128,7 +128,7 @@ headers below are set on the API, the error document and the preview card, and
 | The same headers on `GET /` | Whatever terminates TLS. Nothing in this repository sets them |
 
 `Cross-Origin-Resource-Policy` is deliberately unset. Hono defaults it to
-`same-origin`, and a messenger rendering the preview card loads `/og.png` from
+`same-origin`, and a messenger rendering the preview card loads `/og-red.png` from
 its own client — cross-origin, by definition.
 
 A policy for the document has to allow what the interface actually loads: its

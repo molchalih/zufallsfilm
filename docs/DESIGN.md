@@ -207,7 +207,7 @@ limit exist to avoid.
 | `GET /progress/:user` | — | `{done, total}` for the enrichment a caller is waiting on, or zeroes |
 | `GET /pick` | `user` (required), `maxRuntime` (optional, minutes) | One film, plus `partial`, `pool` and `position` |
 | `GET /watchlist/:user` | `page`, `perPage` (default 100, max 100), `refresh` | `{count, complete, scrapedAt, films[]}` |
-| `GET /og.png` | — | The 1200x630 preview card `index.html` names in its `og:image` |
+| `GET /og-red.png` | — | The 1200x630 preview card `index.html` names in its `og:image` |
 | `GET /robots.txt` | — | Crawl rules. See README § Security headers |
 | Anything else | — | 404. The error document if the request accepts `text/html`, otherwise JSON |
 
@@ -221,8 +221,8 @@ unbudgeted, so a 500-film window is a minute of queueing that only the edge
 timeout ends. 100 bounds it at roughly twelve seconds, and the interface asks
 for `POOL_PAGE_SIZE`, which is smaller still.
 
-`GET /og.png` is served by Hono from a file imported with `type: "file"`, so the
-path is resolved by the runtime rather than from the working directory. It ships
+`GET /og-red.png` is served by Hono from a file imported with `type: "file"`, so
+the path is resolved by the runtime rather than from the working directory. It ships
 because the Dockerfile copies `src` wholesale. Its URL is written absolutely in
 `index.html`: a crawler resolves nothing relative and runs no script, so the
 origin appears literally in both places and the two have to stay in step.
@@ -230,7 +230,13 @@ origin appears literally in both places and the two have to stay in step.
 The card itself is committed rather than generated at build time, and
 `tools/og-card.swift` redraws it. Messengers cache a card by URL for days —
 Telegram until `@WebpageBot` is asked otherwise — so replacing the art means
-moving the path, not just the bytes.
+moving the path, not just the bytes. That is why the route reads `og-red.png`
+and not `og.png`: the wordmark-on-red card replaced an earlier one, and the
+rename is what makes a cache serve the new art.
+
+The card carries the wordmark alone. `og:description` already states what the
+site does, and a messenger renders that text directly beneath the image, so
+setting the same line in the art only repeats it.
 
 `GET /progress/:user` is the one metered-looking route outside the inbound rate
 limiter — it names a user and still is not counted against one. It
