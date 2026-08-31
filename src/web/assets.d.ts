@@ -4,3 +4,10 @@ declare module "*.css" {
   const href: string;
   export default href;
 }
+
+// Imported with `type: "file"`, which yields the asset's path at runtime rather
+// than its contents.
+declare module "*.png" {
+  const path: string;
+  export default path;
+}

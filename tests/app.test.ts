@@ -214,6 +214,29 @@ test("an unrouted request answers in the shape its caller asked for", async () =
   expect(await page.text()).toContain("scene missing.");
 });
 
+test("the preview card is served as a real PNG at the path the meta tag names", async () => {
+  const app = createApp({
+    builder: okBuilder as any,
+    store: openStore(":memory:"),
+    cfg,
+    limiter: limiter(),
+    metrics: createMetrics(),
+  });
+
+  const res = await app.request("/og.png");
+  expect(res.status).toBe(200);
+  expect(res.headers.get("content-type")).toBe("image/png");
+
+  // A crawler that gets HTML here shows no card at all, so assert the bytes are
+  // a PNG rather than the 404 document this route would otherwise fall through
+  // to, and that `index.html` still points at this exact path.
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  expect(Array.from(bytes.slice(0, 4))).toEqual([0x89, 0x50, 0x4e, 0x47]);
+
+  const html = await Bun.file(new URL("../index.html", import.meta.url)).text();
+  expect(html).toContain('content="https://zufalls.film/og.png"');
+});
+
 test("an unhandled throw becomes a 500, not a hang", async () => {
   const metrics = createMetrics();
   const app = createApp({

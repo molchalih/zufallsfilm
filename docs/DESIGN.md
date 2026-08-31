@@ -205,13 +205,28 @@ limit exist to avoid.
 | `GET /metrics` | — | A flat counter and observation snapshot |
 | `GET /progress/:user` | — | `{done, total}` for the enrichment a caller is waiting on, or zeroes |
 | `GET /pick` | `user` (required), `maxRuntime` (optional, minutes) | One film, plus `partial`, `pool` and `position` |
-| `GET /watchlist/:user` | `page`, `perPage` (default 100, max 500), `refresh` | `{count, complete, scrapedAt, films[]}` |
+| `GET /watchlist/:user` | `page`, `perPage` (default 100, max 100), `refresh` | `{count, complete, scrapedAt, films[]}` |
+| `GET /og.png` | — | The 1200x630 preview card `index.html` names in its `og:image` |
 | Anything else | — | 404. The error document if the request accepts `text/html`, otherwise JSON |
 
 `GET /watchlist/:user` is paginated because a watchlist may hold thousands of
 films; returning a 5269-element array is not an acceptable response.
 
-`GET /progress/:user` is the one route outside the inbound rate limiter. It
+`perPage` is capped at 100 rather than the window a caller may ask for. Every
+uncached film in the window queues behind the one global request gate, and
+`buildBudgetMs` bounds `scrapeOnce` only — the enrich pass after it is
+unbudgeted, so a 500-film window is a minute of queueing that only the edge
+timeout ends. 100 bounds it at roughly twelve seconds, and the interface asks
+for `POOL_PAGE_SIZE`, which is smaller still.
+
+`GET /og.png` is served by Hono from a file imported with `type: "file"`, so the
+path is resolved by the runtime rather than from the working directory. It ships
+because the Dockerfile copies `src` wholesale. Its URL is written absolutely in
+`index.html`: a crawler resolves nothing relative and runs no script, so the
+origin appears literally in both places and the two have to stay in step.
+
+`GET /progress/:user` is the one metered-looking route outside the inbound rate
+limiter — it names a user and still is not counted against one. It
 reads a counter and performs no upstream work, and the interface polls it
 several times a second while a build runs, so metering it would throttle the
 very request it reports on. It is not an amplifier: nothing it does reaches
