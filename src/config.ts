@@ -6,6 +6,7 @@ export type WatchlistSource = "html" | "api";
 
 export type Config = Readonly<{
   port: number;
+  version: string;
   dbPath: string;
   source: WatchlistSource;
   egressProxy: string | undefined;
@@ -67,6 +68,10 @@ export function loadConfig(env: Env): Config {
   const apiSecret = env.LETTERBOXD_API_SECRET ?? "";
   const cfg = Object.freeze({
     port: num(env, "PORT", 3000),
+    // Stamped by the deployment, not derived from package.json: the running
+    // container is the thing being identified, and its manifest version does
+    // not move between releases.
+    version: env.APP_VERSION ?? "dev",
     dbPath: env.DB_PATH ?? "data/picker.sqlite",
     source: source(env, apiKey !== "" && apiSecret !== ""),
     egressProxy: proxy,

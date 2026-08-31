@@ -41,7 +41,64 @@ test("health reports egress configuration", async () => {
   });
   const r = await app.request("/health");
   expect(r.status).toBe(200);
-  expect((await json(r)).egress).toBe("direct");
+  const body = await json(r);
+  expect(body.egress).toBe("direct");
+  // The stamp identifies the running deployment; unset, it says so rather than
+  // reporting a version the container cannot vouch for.
+  expect(body.version).toBe("dev");
+});
+
+test("health carries the version the deployment stamped", async () => {
+  const app = createApp({
+    builder: okBuilder as any,
+    store: openStore(":memory:"),
+    cfg: loadConfig({ APP_VERSION: "2026.08.31-abc1234" }),
+    limiter: limiter(),
+    metrics: createMetrics(),
+  });
+  expect((await json(await app.request("/health"))).version).toBe("2026.08.31-abc1234");
+});
+
+test("robots keeps crawlers off every route that reaches Letterboxd", async () => {
+  const app = createApp({
+    builder: okBuilder as any,
+    store: openStore(":memory:"),
+    cfg,
+    limiter: limiter(),
+    metrics: createMetrics(),
+  });
+
+  const res = await app.request("/robots.txt");
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  for (const path of ["/pick", "/watchlist/", "/progress/"]) {
+    expect(body).toContain(`Disallow: ${path}`);
+  }
+  // The interface and the preview card are what a shared link resolves to, so
+  // a blanket disallow here would cost the site its own listing and its card.
+  expect(body).not.toContain("Disallow: /\n");
+  expect(body).not.toContain("Disallow: /og.png");
+});
+
+test("responses carry a policy, and none that blocks the card cross-origin", async () => {
+  const app = createApp({
+    builder: okBuilder as any,
+    store: openStore(":memory:"),
+    cfg,
+    limiter: limiter(),
+    metrics: createMetrics(),
+  });
+
+  const res = await app.request("/og.png");
+  expect(res.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+  expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+  // Hono defaults this to same-origin, which stops a messenger's own client
+  // from rendering the card it was handed.
+  expect(res.headers.get("cross-origin-resource-policy")).toBeNull();
+
+  // The error document styles itself inline, having no bundle to link.
+  const page = await app.request("/nope", { headers: { accept: "text/html" } });
+  expect(page.headers.get("content-security-policy")).toContain("style-src 'unsafe-inline'");
 });
 
 test("pick requires a user parameter", async () => {

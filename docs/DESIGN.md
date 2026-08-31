@@ -201,12 +201,13 @@ limit exist to avoid.
 | Route | Params | Returns |
 |---|---|---|
 | `GET /` | — | The interface. Bundled by `Bun.serve`, not routed by Hono |
-| `GET /health` | — | `{status, egress, version}` |
+| `GET /health` | — | `{status, version, egress, inFlight}` |
 | `GET /metrics` | — | A flat counter and observation snapshot |
 | `GET /progress/:user` | — | `{done, total}` for the enrichment a caller is waiting on, or zeroes |
 | `GET /pick` | `user` (required), `maxRuntime` (optional, minutes) | One film, plus `partial`, `pool` and `position` |
 | `GET /watchlist/:user` | `page`, `perPage` (default 100, max 100), `refresh` | `{count, complete, scrapedAt, films[]}` |
 | `GET /og.png` | — | The 1200x630 preview card `index.html` names in its `og:image` |
+| `GET /robots.txt` | — | Crawl rules. See README § Security headers |
 | Anything else | — | 404. The error document if the request accepts `text/html`, otherwise JSON |
 
 `GET /watchlist/:user` is paginated because a watchlist may hold thousands of
@@ -224,6 +225,11 @@ path is resolved by the runtime rather than from the working directory. It ships
 because the Dockerfile copies `src` wholesale. Its URL is written absolutely in
 `index.html`: a crawler resolves nothing relative and runs no script, so the
 origin appears literally in both places and the two have to stay in step.
+
+The card itself is committed rather than generated at build time, and
+`tools/og-card.swift` redraws it. Messengers cache a card by URL for days —
+Telegram until `@WebpageBot` is asked otherwise — so replacing the art means
+moving the path, not just the bytes.
 
 `GET /progress/:user` is the one metered-looking route outside the inbound rate
 limiter — it names a user and still is not counted against one. It

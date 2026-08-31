@@ -73,6 +73,11 @@ jobs:
         with:
           context: .
           push: true
+          # The image is tagged `sha-<commit>`; this puts the same commit inside
+          # it, so `/health` identifies the running container without anything
+          # having to resolve a tag back to a digest.
+          build-args: |
+            APP_VERSION=${{ github.sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

@@ -1,5 +1,6 @@
 import type { Context } from "hono";
 import { Hono } from "hono";
+import { secureHeaders } from "hono/secure-headers";
 import type { Builder } from "./build";
 import { BuildError } from "./build";
 import type { Config } from "./config";
@@ -64,6 +65,32 @@ export function createApp(deps: {
   const { builder, cfg, limiter, metrics } = deps;
   const app = new Hono();
 
+  // These cover what Hono answers: the API, the error document and the preview
+  // card. They do not cover `GET /`, which `Bun.serve` routes to the bundle
+  // without passing through here — the document's own policy has to be set by
+  // whatever terminates TLS. See README § Security headers.
+  app.use(
+    "*",
+    secureHeaders({
+      contentSecurityPolicy: {
+        defaultSrc: ["'none'"],
+        // The error document carries its styles inline, having no bundle to
+        // link against, and sets a handful of attributes the same way.
+        styleSrc: ["'unsafe-inline'"],
+        imgSrc: ["'self'"],
+        baseUri: ["'none'"],
+        formAction: ["'none'"],
+        frameAncestors: ["'none'"],
+      },
+      referrerPolicy: "strict-origin-when-cross-origin",
+      strictTransportSecurity: "max-age=31536000; includeSubDomains",
+      xFrameOptions: "DENY",
+      // Left off: it defaults to `same-origin`, and a messenger rendering the
+      // preview card in its own client loads `/og.png` cross-origin.
+      crossOriginResourcePolicy: false,
+    }),
+  );
+
   app.use("*", async (c, next) => {
     const t0 = Date.now();
     await next();
@@ -82,6 +109,26 @@ export function createApp(deps: {
   });
 
   app.get("/metrics", (c) => c.json(metrics.snapshot()));
+
+  // Every route that names a user reaches Letterboxd on a miss, so an indexed
+  // `/watchlist/<name>` turns a crawler's budget into outbound scrape volume
+  // metered by the one global gate. The card and the interface stay crawlable:
+  // they are what a shared link is supposed to resolve to.
+  app.get("/robots.txt", (c) =>
+    c.text(
+      [
+        "User-agent: *",
+        "Disallow: /pick",
+        "Disallow: /watchlist/",
+        "Disallow: /progress/",
+        "Disallow: /health",
+        "Disallow: /metrics",
+        "",
+      ].join("\n"),
+      200,
+      { "Cache-Control": "public, max-age=86400" },
+    ),
+  );
 
   // The card messengers show for a shared link. `index.html` names it as an
   // absolute URL because a crawler resolves nothing relative, so this path is
@@ -111,6 +158,7 @@ export function createApp(deps: {
   app.get("/health", (c) =>
     c.json({
       status: "ok",
+      version: cfg.version,
       egress: cfg.egressProxy ? "proxy" : "direct",
       inFlight: builder.inFlightCount(),
     }),

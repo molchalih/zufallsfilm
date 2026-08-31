@@ -50,11 +50,13 @@ docker compose up -d --build
 
 | Route | Params | Returns |
 |---|---|---|
-| `GET /health` | — | `{status, egress, inFlight}` |
+| `GET /health` | — | `{status, version, egress, inFlight}` |
 | `GET /progress/:user` | — | `{done, total}` for a read in flight |
 | `GET /pick` | `user` (required), `maxRuntime` (optional, minutes) | One film, plus `partial` and `pool` |
-| `GET /watchlist/:user` | `page`, `perPage` (default 100, max 500) | `{count, complete, partial, films[]}` |
+| `GET /watchlist/:user` | `page`, `perPage` (default 100, max 100) | `{count, complete, partial, films[]}` |
 | `GET /metrics` | — | Counters and observations |
+| `GET /og.png` | — | The 1200x630 link preview card |
+| `GET /robots.txt` | — | Crawl rules. See § Security headers |
 
 ```bash
 curl "http://localhost:3000/pick?user=examplemember&maxRuntime=100"
@@ -80,6 +82,7 @@ and by CI. Only `tests/live.test.ts` touches the network, and it skips unless
 | Variable | Default | Meaning |
 |---|---|---|
 | `PORT` | `3000` | Listen port |
+| `APP_VERSION` | the commit, baked at build | Stamp reported by `/health`. CI passes `github.sha` as a build argument; setting it at runtime overrides that |
 | `DB_PATH` | `data/picker.sqlite` | SQLite file |
 | `WATCHLIST_SOURCE` | credentials decide | `html` or `api`, overriding the automatic choice. See § Where watchlists come from |
 | `EGRESS_PROXY` | unset | Outbound HTTP proxy, `http://host:port`. SOCKS is not supported. `html` path only |
@@ -111,6 +114,45 @@ other: with nothing in front of the service, trusting it lets a caller mint a
 fresh bucket per request by varying it, which is the whole limiter gone. Turn it
 on only where a proxy you control sets the header, since a proxy that appends to
 a client-supplied value is no safer than trusting the client.
+
+## Security headers
+
+Two things serve this site, and only one of them is Hono. `Bun.serve` routes
+`GET /` straight to the bundle, so it never passes through middleware: the
+headers below are set on the API, the error document and the preview card, and
+**not** on the interface itself.
+
+| Header | Set by |
+|---|---|
+| `Content-Security-Policy`, `Referrer-Policy`, `X-Content-Type-Options`, `X-Frame-Options`, `Strict-Transport-Security` | The service, on every route Hono answers |
+| The same headers on `GET /` | Whatever terminates TLS. Nothing in this repository sets them |
+
+`Cross-Origin-Resource-Policy` is deliberately unset. Hono defaults it to
+`same-origin`, and a messenger rendering the preview card loads `/og.png` from
+its own client — cross-origin, by definition.
+
+A policy for the document has to allow what the interface actually loads: its
+own bundle, posters from `a.ltrbxd.com`, the inline `data:` favicon, and inline
+styles, which React writes as attributes.
+
+```nginx
+add_header Content-Security-Policy "default-src 'self'; img-src 'self' data: https://a.ltrbxd.com; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" always;
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+add_header X-Content-Type-Options "nosniff" always;
+```
+
+`bun run dev` serves an inline script for hot reload, which `script-src 'self'`
+blocks. That is a property of the dev server, not of the deployed container:
+`development` is off unless `NODE_ENV=development`, and the production bundle
+links its script rather than inlining it.
+
+`robots.txt` disallows `/pick`, `/watchlist/`, `/progress/`, `/health` and
+`/metrics`, and nothing else. Each of the first three names a member and reaches
+Letterboxd on a cache miss, so an indexed URL under them converts a crawler's
+budget into outbound scrape volume — all of it queued behind the one global
+gate `GLOBAL_REQ_PER_SEC` sets. The interface and the card stay crawlable,
+because a shared link is supposed to resolve to them.
 
 ## Documentation
 
