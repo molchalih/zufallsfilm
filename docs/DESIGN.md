@@ -49,6 +49,7 @@ Rows marked *derived* are computed from a measurement, not observed.
 | Search result pollution | `perPage` counts non-film items: `perPage=8` → 6 films | — | **`&include=FilmSearchItem` is mandatory**, and makes the endpoint ~3× faster |
 | Endpoints probed on `api.letterboxd.com` returning 401 | `/film/{id}`, `/films`, `/list`, `/lists`, `/member/{id}`, `/member/{id}/watchlist`, `/log-entries`, `/members`, `/news` | 19 probed | No watchlist route is reachable without a key |
 | Origin rate limit | HTTP 403 from `nginx`, no `Retry-After`, no challenge markers, **clears on retry** | 150 req | Transient. Must not be treated as a block |
+| Member the site refuses | HTTP 403 carrying Letterboxd's own page, `Letterboxd - Forbidden` in the body. Permanent: **does not clear on retry** | 2 members (`/jack`, `/crew`), 2026-08-30 | Classify as `forbidden` before the rate-limit row, and never retry it. A **bare** 403 stays transient, so privacy is never inferred from the status alone |
 | CORS headers | None on any host probed | 3 hosts | A browser cannot call Letterboxd directly |
 | Hosts the origin refuses | HTTP 403 / 520 / 522 | 3 hosts | A deployment on such a host needs an outbound HTTP proxy. See § Egress |
 | Enrichment throughput (search, `include=FilmSearchItem`, concurrency 8) | 69 ms/film amortized | n=200 | ~350 films ≈ 24 s |
