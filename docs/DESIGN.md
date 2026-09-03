@@ -208,7 +208,7 @@ limit exist to avoid.
 | `GET /pick` | `user` (required), `maxRuntime` (optional, minutes) | One film, plus `partial`, `pool` and `position` |
 | `GET /watchlist/:user` | `page`, `perPage` (default 100, max 100), `refresh` | `{count, complete, scrapedAt, films[]}` |
 | `GET /og-red.png` | — | The 1200x630 preview card `index.html` names in its `og:image` |
-| `GET /robots.txt` | — | Crawl rules. See README § Security headers |
+| `GET /robots.txt` | — | Crawl rules |
 | Anything else | — | 404. The error document if the request accepts `text/html`, otherwise JSON |
 
 `GET /watchlist/:user` is paginated because a watchlist may hold thousands of

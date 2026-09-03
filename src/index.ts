@@ -9,6 +9,7 @@ import { createClient } from "./client";
 import { loadConfig } from "./config";
 import { createEnricher } from "./enricher";
 import { createFetcher, createRateGate } from "./fetcher";
+import { withHousePool } from "./house";
 import { createLetterboxd } from "./letterboxd";
 import { createMetrics } from "./metrics";
 import { createLimiter } from "./ratelimit";
@@ -35,7 +36,7 @@ const gate = createRateGate(cfg.source === "api" ? cfg.apiReqPerSec : cfg.global
 // Two builders, one contract. Only the selected path's collaborators are
 // constructed: the API path never builds a fetcher or an enricher, and the HTML
 // path never opens an API client.
-const builder: Builder =
+const base: Builder =
   cfg.source === "api"
     ? createApiBuilder({
         letterboxd: createLetterboxd(createClient(cfg, fetch, undefined, gate)),
@@ -48,6 +49,10 @@ const builder: Builder =
         const fetcher = createFetcher(cfg, fetch, undefined, gate);
         return createBuilder({ fetcher, enricher: createEnricher(fetcher), store, cfg, metrics });
       })();
+
+// The interface's "go completely random" draws from a catalogue this
+// repository owns rather than from anyone's watchlist. See src/house.ts.
+const builder: Builder = withHousePool(base);
 
 const limiter = createLimiter({
   ratePerMin: cfg.ratePerMin,

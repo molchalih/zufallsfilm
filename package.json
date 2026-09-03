@@ -14,6 +14,7 @@
   "scripts": {
     "dev": "NODE_ENV=development bun --hot src/index.ts",
     "start": "bun run src/index.ts",
+    "house": "bun run scripts/build-house-pool.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome check",
     "bundle": "bun build index.html --outdir .bundle-check --minify",

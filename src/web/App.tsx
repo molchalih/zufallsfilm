@@ -24,13 +24,12 @@ import { Result } from "./screens/Result";
 import { buildReel, type Reel, scrapeBar } from "./spin";
 
 /**
- * The watchlist this site draws from when nobody names one. The API has no
- * notion of a film without a member to draw it from, so "completely random"
- * means a random film from a house watchlist rather than a capability the
- * backend does not have. Sight & Sound's is public, curated and institutional,
- * which is why it stands in here and a private individual's does not.
+ * What this site draws from when nobody names a member. Not a watchlist: the
+ * house pool is a catalogue of the canon that the service ships with, so the
+ * answer to "surprise me" is a film worth watching and arrives without an
+ * upstream read. See `src/house.ts`.
  */
-const HOUSE_USER = "sightsound";
+const HOUSE_USER = ".house";
 
 const SPIN_MS = 5000;
 /** The bar runs at least this long, so a warm answer still reads as a spin. */

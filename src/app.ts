@@ -68,7 +68,7 @@ export function createApp(deps: {
   // These cover what Hono answers: the API, the error document and the preview
   // card. They do not cover `GET /`, which `Bun.serve` routes to the bundle
   // without passing through here — the document's own policy has to be set by
-  // whatever terminates TLS. See README § Security headers.
+  // whatever terminates TLS. See README § Self-hosting.
   app.use(
     "*",
     secureHeaders({

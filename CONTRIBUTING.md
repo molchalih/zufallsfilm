@@ -2,102 +2,56 @@
 
 ## Merging
 
-`main` holds one commit per logical change. Branch history is working material;
-it is not published.
-
-| Rule | Rationale |
-|---|---|
-| Squash merge only. Merge commits and rebase merges are disabled on the remote | A branch's twelve intermediate commits describe how the work was found, not what changed. `main` should read as a list of changes, so `git log` and `git bisect` stay useful |
-| The pull request title becomes the commit subject. Its body stays on the pull request | The title is already written for a reader who was not present, and reusing it removes the second, worse description a merge commit would otherwise generate. The body does not travel with it: § Commits keeps commit bodies empty, so the pull request remains the place the narrative lives |
-| Delete the branch once merged | The commit is on `main`; the branch is a duplicate that ages badly |
-| Never force-push a branch someone else has pulled, and never rewrite `main` | Rewriting published history invalidates every clone. History was rewritten once, before the first push, and that is the only safe time |
+- Squash merge only. Merge commits and rebase merges are disabled on the remote.
+- The pull request title becomes the commit subject; its body stays on the pull request.
+- Delete the branch once merged.
+- Never force-push a branch someone else has pulled, and never rewrite `main`.
 
 ## Commits
 
-| Rule | Rationale |
-|---|---|
-| One logical change per pull request | A pull request that changes the parser and the container image cannot be reviewed as one thing, or reverted as one thing |
-| Work-in-progress, fixup and review-response commits belong on a branch and never on `main` | Squash discards them, so write them freely. This is the point of squashing: cheap commits while working, one clean commit when landing |
-| Subject is `type(scope): description` — lowercase description, imperative mood, no trailing period, under 72 characters | `feat(web): add the film picker interface`, not `Added picker stuff.` The type says what kind of change it is without opening the diff, and it is machine-readable, so changelog and release tooling stay available later |
-| Types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`, `revert` | A closed set. A change that fits none of them is usually two changes |
-| The body is empty | A commit body is invisible from `git log --oneline`, from the file, and from the review, so it is the wrong home for anything a reader needs later. Architectural reasoning belongs in `docs/decisions/DR-<n>-<slug>.md`, measured facts in `docs/DESIGN.md`, and the narrative of a change in the pull request that carries it |
-| The commits before this policy do not follow it, and never will | `main` is published, and § Merging forbids rewriting it. The boundary is a fact about the history, not a defect to repair |
-| A commit that only fixes the previous commit should be amended into it before pushing | Two commits that describe one change are one commit that has not been finished |
+- One logical change per pull request.
+- Work-in-progress, fixup, and review-response commits belong on a branch, never on `main` (squash discards them, so commit freely while working).
+- Subject: `type(scope): description`, with a lowercase description, imperative mood, no trailing period, under 72 characters.
+- Types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`, `revert`. A change that fits none of them is usually two changes.
+- The body is empty. Architectural reasoning goes in `docs/decisions/DR-<n>-<slug>.md`, measured facts in `docs/DESIGN.md`, the narrative in the pull request.
+- A commit that only fixes the previous one gets amended into it before pushing.
 
 ## Gate
 
-`bun run check` runs the typecheck, the linter, a production bundle of the
-interface and the tests. It is wired in two places, and neither is optional:
+`bun run check` runs typecheck, lint, a production bundle, and tests. Enforced by `.githooks/pre-commit` and by `.github/workflows/ci.yml` on every push and pull request. Don't skip it with `--no-verify`.
 
-| Where | Scope |
-|---|---|
-| `.githooks/pre-commit` | The full gate, before every commit |
-| `.github/workflows/ci.yml` | The full gate, on every push and pull request |
-
-Activate the hooks once per clone:
+Activate hooks once per clone:
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-Bun does not typecheck on its own — `bun test` passes with type errors present,
-so `tsc --noEmit` is the only thing standing between the annotations and
-reality. Do not skip the gate with `--no-verify`.
-
-`bun run bundle` is in the gate because the interface has no build step of its
-own: `Bun.serve` bundles `index.html` at boot, so a broken import or an
-unparseable stylesheet is a runtime failure on the first request rather than a
-compile error. The gate builds it once so that failure happens here instead.
+(`tsc --noEmit` is needed because `bun test` passes with type errors present. `bun run bundle` is needed because `Bun.serve` bundles `index.html` at boot, so a broken import would otherwise surface as a runtime failure instead of a build error.)
 
 ## Release
 
-`ci.yml` does two things, not one: the `check` job above gates a `release` job that runs only on a
-push to `main`. There is no separate deploy step and nothing to run by hand.
+`ci.yml`'s `check` job gates a `release` job that runs only on pushes to `main`. There is no separate deploy step.
 
 | Stage | What happens |
 |---|---|
-| `check` | The full gate. It **gates** `release` via `needs:` — no green, no image |
-| `release` | Builds the container, pushes `ghcr.io/molchalih/zufallsfilm:main` + `:sha-<sha>`, and **keyless-cosign-signs the digest** |
-| deployment | The host resolves `:main` to an immutable digest, **cosign-verifies that digest**, and rolls the container. Typically live within ~35 minutes |
+| `check` | Full gate; gates `release` via `needs:` |
+| `release` | Builds the container, pushes `ghcr.io/molchalih/zufallsfilm:main` + `:sha-<sha>`, keyless-cosign-signs the digest |
+| deployment | Resolves `:main` to a digest, cosign-verifies it, rolls the container (~35 min) |
 
-Pushing to `main` therefore ships to production. Nothing else is required, and nothing else is
-possible: the deployment refuses any image it cannot verify.
+Pushing to `main` ships to production; the deployment refuses any image it cannot verify.
 
-### The workflow filename and branch are load-bearing
-
-The deployment pins the signing identity as a regexp:
+**The workflow filename and branch are load-bearing.** The deployment pins the signing identity to:
 
 ```
 ^https://github\.com/molchalih/zufallsfilm/\.github/workflows/ci\.yml@refs/heads/main$
 ```
 
-**Renaming `.github/workflows/ci.yml`, moving the release job into another workflow file, or changing
-the default branch will break production deploys** — and it breaks them *silently*: images keep
-building and signing, verification simply stops matching, and the running version quietly stops
-advancing. Any such change has to land together with the matching change on the deployment side.
+Renaming `.github/workflows/ci.yml`, moving `release` to another file, or changing the default branch breaks deploys **silently**: builds and signs keep working, verification just stops matching. Any such change must land with the matching change on the deployment side. `release`'s last step re-runs this regexp against the digest it just signed, so drift fails the build instead of going unnoticed.
 
-The last step of `release` re-runs that exact regexp against the digest it just signed, so this drift
-fails the build here instead of going unnoticed. Do not delete it, and keep the regexp in it identical
-to the one above.
-
-### Signing and concurrency
-
-The signature is on the **digest**, never on the `:main` tag — the deployment verifies the digest it
-resolved, so a signature bound to a moving tag would prove nothing about what actually runs.
-
-Pull requests cancel superseded runs; pushes to `main` deliberately **do not**. A cancellation between
-the image push and the signing step would publish an unsigned digest, which the deployment then
-refuses. `:main` is also guarded with `enable={{is_default_branch}}` so no other branch can move the
-channel.
-
-Actions are pinned by commit SHA rather than by tag. A mutable tag on a third-party action is a
-supply-chain hole, and major-version tags are not always published — `cosign-installer` has none,
-which is how the first release run failed.
+The signature is on the digest, never the `:main` tag. Pull requests cancel superseded runs; pushes to `main` don't (a cancellation between push and sign would publish an unsigned digest). `:main` is guarded with `enable={{is_default_branch}}`. Actions are pinned by commit SHA, not tag (mutable tags are a supply-chain risk, and not every action publishes one, and `cosign-installer` does not).
 
 ## Tests
 
-| Rule | Rationale |
-|---|---|
-| A behaviour change arrives with the test that would have caught its absence | The suite runs in under a second; there is no cost argument for skipping it |
-| Only `tests/live.test.ts` may touch the network, and it skips unless `LIVE=1` | A broken outbound path must never be able to fail the suite |
-| Fixtures under `tests/fixtures/` are hand-authored, never captured from a live response | A captured page carries a real member's account, their films and whatever else the origin put on it, none of which belongs in a public repository. A fixture holds the attributes the parser reads and nothing else |
+- A behaviour change arrives with the test that would have caught its absence.
+- Only `tests/live.test.ts` may touch the network, and it skips unless `LIVE=1`.
+- Fixtures under `tests/fixtures/` are hand-authored, never captured from a live response (a captured page carries real member data; a fixture holds only what the parser reads).
