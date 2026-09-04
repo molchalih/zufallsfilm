@@ -1,6 +1,8 @@
+import type { Rng } from "../random";
 import type { Film } from "./api";
 
-export type Rng = () => number;
+export { mulberry32 } from "../random";
+export type { Rng };
 
 // ── Easing ──────────────────────────────────────────────────────────────────
 
@@ -17,7 +19,8 @@ export const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
  * What an animation draws. `tease` is decor — films the machine flicks past
  * while it pretends to decide — and `winner` is the film the server actually
  * chose. They are separate because the server draws from the whole watchlist
- * while the pool is only its first page: the winner is frequently not in it.
+ * while the pool is a sixty-film sample of it: the winner is frequently not
+ * in it.
  */
 export type Reel = {
   tease: Film[];
@@ -31,7 +34,7 @@ export type Reel = {
  *
  * The nudge is one step, not seven: a stride only breaks a tie if it is
  * coprime with the pool size, and `(k + 7) % 7` is `k`. A seven-film watchlist
- * is entirely reachable — `POOL_PAGE_SIZE` is a ceiling, not a floor — and the
+ * is entirely reachable — `POOL_SIZE` is a ceiling, not a floor — and the
  * reel would visibly stall on repeated frames.
  */
 export function buildReel(pool: Film[], winner: Film, length: number, rng: Rng): Reel {
@@ -215,22 +218,4 @@ export function formatYear(year: number | null): string {
 /** Zero-padded ordinal, wide enough for the largest index in the set. */
 export function padIndex(i: number, total: number): string {
   return String(i + 1).padStart(String(Math.max(total, 1)).length, "0");
-}
-
-// ── Seeded randomness ───────────────────────────────────────────────────────
-
-/**
- * mulberry32. A spin's layout is derived from one integer so that a re-render
- * mid-spin — React's strict mode double-invokes, and so does a state change —
- * reproduces exactly what is already on screen instead of reshuffling it.
- */
-export function mulberry32(seed: number): Rng {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }

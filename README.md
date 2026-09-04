@@ -22,7 +22,7 @@ single build.
 | Route | Params | Returns |
 |---|---|---|
 | `GET /pick` | `user` (required), `maxRuntime` (minutes) | One film, plus `partial` and `pool` |
-| `GET /watchlist/:user` | `page`, `perPage` (default and max 100) | `{count, complete, partial, films[]}` |
+| `GET /watchlist/:user` | `page`, `perPage` (default and max 100), `sample` | `{count, complete, partial, sampled, positions[], films[]}` |
 | `GET /progress/:user` | none | `{done, total}` for a read in flight |
 | `GET /health` | none | `{status, version, egress, inFlight}` |
 | `GET /metrics` | none | Counters and observations |
@@ -30,6 +30,11 @@ single build.
 ```bash
 curl "https://zufalls.film/pick?user=examplemember&maxRuntime=100"
 ```
+
+`sample=1` returns `perPage` films drawn from across the whole watchlist,
+shuffled, instead of a page of it; `page` is then ignored. `positions[i]` is
+`films[i]`'s 1-based place in the watchlist, which a page implies and a sample
+otherwise leaves unknowable.
 
 ## Self-hosting
 

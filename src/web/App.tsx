@@ -67,8 +67,10 @@ type Spin = {
   reel: Reel;
   anim: Animation;
   seed: number;
-  /** Decor for the animation. One page of the watchlist, never the pick. */
+  /** Decor for the animation. A sample of the watchlist, never the pick. */
   pool: Film[];
+  /** `positions[i]` is `pool[i]`'s 1-based place in the watchlist. */
+  positions: number[];
   /** Films the watchlist holds, for the position readouts during a spin. */
   total: number;
   /** The winner's own place in the watchlist, which the pool may not contain. */
@@ -182,6 +184,7 @@ export function App() {
             seed: (Math.random() * 0x100000000) >>> 0,
             reel: buildReel(pool.films, pickRes.film, REEL_FRAMES[anim], Math.random),
             pool: pool.films,
+            positions: pool.positions,
             total: Math.max(pool.count, pool.films.length),
             // The pick's own count, not the pool's: a backfill that lands
             // between the two requests would make them disagree, and only one
@@ -243,8 +246,8 @@ export function App() {
     document.title = winner ? `${winner.name} · zufallsfilm` : "zufallsfilm";
   }, [winner]);
 
-  const poolIndex = useMemo(
-    () => new Map((spin?.pool ?? []).map((f, i) => [f.lid, i] as const)),
+  const poolPosition = useMemo(
+    () => new Map((spin?.pool ?? []).map((f, i) => [f.lid, spin?.positions[i] ?? i + 1] as const)),
     [spin],
   );
 
@@ -302,7 +305,7 @@ export function App() {
             reel={spin.reel}
             pool={spin.pool}
             total={spin.total}
-            poolIndex={poolIndex}
+            poolPosition={poolPosition}
             winnerPosition={spin.winnerPosition}
             seed={spin.seed}
             t={t}
