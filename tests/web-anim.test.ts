@@ -36,7 +36,9 @@ function props(t: number, poolSize = 40, winner = film(999)): AnimProps {
     reel: buildReel(pool, winner, 40, mulberry32(3)),
     pool,
     total: 412,
-    poolIndex: new Map(pool.map((f, i) => [f.lid, i] as const)),
+    // Scattered, as a sample of a 412-film watchlist is: a decor film's
+    // position has nothing to do with where it sits in the pool.
+    poolPosition: new Map(pool.map((f, i) => [f.lid, i * 7 + 3] as const)),
     winnerPosition: 207,
     seed: 12345,
     t,
@@ -66,12 +68,13 @@ test("a grid cell shows the winner only at its reserved index", () => {
 });
 
 test("a winner absent from the pool still shows its own watchlist position", () => {
-  // The draw is from the whole watchlist and the pool is one page of it, so
-  // the winner is usually not in `poolIndex`. It used to render as a bare dot.
+  // The draw is from the whole watchlist and the pool is a sample of it, so
+  // the winner is usually not in `poolPosition`. It used to render as a bare dot.
   const p = props(0.5);
-  expect(p.poolIndex.has(p.reel.winner.lid)).toBe(false);
+  expect(p.poolPosition.has(p.reel.winner.lid)).toBe(false);
   expect(positionLabel(p, p.reel.winner)).toBe("207");
-  expect(positionLabel(p, p.pool[7])).toBe("008");
+  // The server's position, not the pool index: pool[7] is the 52nd film.
+  expect(positionLabel(p, p.pool[7])).toBe("052");
 });
 
 test("every row of the roll strip carries a number", () => {

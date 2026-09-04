@@ -167,7 +167,7 @@ route decides which those are:
 |---|---|---|
 | `GET /pick`, no `maxRuntime` | 1 | Draw first, enrich the one film the response carries |
 | `GET /pick` with `maxRuntime` | all, then the winner | A runtime filter has to know every runtime |
-| `GET /watchlist/:user` | the page returned | Enrich the page, not the watchlist behind it |
+| `GET /watchlist/:user` | the films returned | Enrich the page or sample, not the watchlist behind it |
 
 Measured on a watchlist of over a thousand films with a cold `film` table: a 120-film page
 took 15 s; a 60-film page, 7.6 s; both, warm, under 1 ms. The interface asks
@@ -206,7 +206,7 @@ limit exist to avoid.
 | `GET /metrics` | — | A flat counter and observation snapshot |
 | `GET /progress/:user` | — | `{done, total}` for the enrichment a caller is waiting on, or zeroes |
 | `GET /pick` | `user` (required), `maxRuntime` (optional, minutes) | One film, plus `partial`, `pool` and `position` |
-| `GET /watchlist/:user` | `page`, `perPage` (default 100, max 100), `refresh` | `{count, complete, scrapedAt, films[]}` |
+| `GET /watchlist/:user` | `page`, `perPage` (default 100, max 100), `sample`, `refresh` | `{count, complete, sampled, positions[], films[]}` |
 | `GET /og-red.png` | — | The 1200x630 preview card `index.html` names in its `og:image` |
 | `GET /robots.txt` | — | Crawl rules |
 | Anything else | — | 404. The error document if the request accepts `text/html`, otherwise JSON |
@@ -214,12 +214,42 @@ limit exist to avoid.
 `GET /watchlist/:user` is paginated because a watchlist may hold thousands of
 films; returning a 5269-element array is not an acceptable response.
 
+`sample=1` replaces the page with `perPage` films drawn from across the whole
+watchlist, shuffled, and `page` is then ignored. The interface asks for it and
+API clients do not: a page is a run of a sorted list, so page one of an
+alphabetical watchlist is every film whose title starts with an A, and the spin
+animations riffle through the pool in front of the visitor. Drawing a page there
+showed the same alphabetical head on every watchlist — the pick itself was
+always drawn from the whole list, so this was a lie told by the decor, not a
+biased draw.
+
+The sample is seeded on the username and the watchlist length, not on the
+request, so every read of the same watchlist selects the same films. A fresh
+draw per request would be a fresh set of uncached films to enrich per request —
+measured at 7.6 s for sixty of them against under a millisecond warm — which
+would have made every visit pay a cold enrichment forever. The per-spin variety
+the animations show comes from the client instead: the reel it builds from the
+pool is drawn fresh on every spin.
+
+A sample can only spread across what has been read. A cold build serves page
+one while the rest backfills, so `getWatchlist` returns 28 films and a sample of
+sixty is all 28 of them — the alphabetical head, exactly what the sample exists
+to avoid. It is the same 28 films the pick itself is drawn from at that moment,
+and `partial: true` already says so; the interface re-reads a partial pool on
+the next spin, and the spread appears once the backfill has landed.
+
+`positions[i]` is `films[i]`'s 1-based place in the watchlist. It is derivable
+from `page` and `perPage` for a page and is the only source of it for a sample,
+and the interface prints it beside every decor film. It sits beside `films`
+rather than inside the film for the reason `pool` and `position` do on `/pick`:
+a position describes a draw, not a film.
+
 `perPage` is capped at 100 rather than the window a caller may ask for. Every
 uncached film in the window queues behind the one global request gate, and
 `buildBudgetMs` bounds `scrapeOnce` only — the enrich pass after it is
 unbudgeted, so a 500-film window is a minute of queueing that only the edge
 timeout ends. 100 bounds it at roughly twelve seconds, and the interface asks
-for `POOL_PAGE_SIZE`, which is smaller still.
+for `POOL_SIZE`, which is smaller still.
 
 `GET /og-red.png` is served by Hono from a file imported with `type: "file"`, so
 the path is resolved by the runtime rather than from the working directory. It ships

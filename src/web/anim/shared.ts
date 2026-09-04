@@ -7,16 +7,19 @@ export type Animation = (typeof ANIMATIONS)[number];
 
 export type AnimProps = {
   reel: Reel;
-  /** Decor films, in watchlist order. May be shorter than the watchlist. */
+  /**
+   * Decor films: a shuffled sample spread across the watchlist, not a run of
+   * it. Order carries no meaning and is not watchlist order.
+   */
   pool: Film[];
   /** Total films in the watchlist, for the position readouts. */
   total: number;
-  /** Watchlist position by film id. Built once per spin. */
-  poolIndex: ReadonlyMap<string, number>;
+  /** 1-based watchlist position by film id. Built once per spin. */
+  poolPosition: ReadonlyMap<string, number>;
   /**
    * The winner's own 1-based place in the watchlist. The server draws from the
-   * whole watchlist while the pool is only its first page, so the winner is
-   * frequently absent from `poolIndex` and this is the only place its number
+   * whole watchlist while the pool is a sample of it, so the winner is
+   * frequently absent from `poolPosition` and this is the only place its number
    * can come from.
    */
   winnerPosition: number;
@@ -57,13 +60,12 @@ export function cellFilm(props: AnimProps, winnerCell: number, cell: number): Fi
 
 /**
  * The watchlist position readout for a film, padded to the width of the
- * largest position. Decor comes from the pool and knows its own index; the
- * winner usually does not appear in the pool at all and carries its position
- * from the server instead.
+ * largest position. Decor is sampled from across the watchlist, so its
+ * position comes from the server rather than from where it sits in the pool;
+ * the winner usually does not appear in the pool at all and carries its own.
  */
 export function positionLabel(props: AnimProps, film: Film): string {
-  const at = props.poolIndex.get(film.lid);
-  const position = at === undefined ? props.winnerPosition : at + 1;
+  const position = props.poolPosition.get(film.lid) ?? props.winnerPosition;
   return String(position).padStart(String(props.total).length, "0");
 }
 

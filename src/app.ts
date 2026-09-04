@@ -6,6 +6,7 @@ import { BuildError } from "./build";
 import type { Config } from "./config";
 import type { Metrics } from "./metrics";
 import { pick } from "./picker";
+import { mulberry32, sampleIndices, seedFrom } from "./random";
 import type { Limiter } from "./ratelimit";
 import type { Store } from "./store";
 import { errorPage } from "./web/errorPage";
@@ -220,24 +221,52 @@ export function createApp(deps: {
     const gate = limiter.check(clientIp(c), user);
     if (!gate.ok) return c.json({ error: true, reason: `throttled_${gate.reason}` }, 429);
 
-    const page = Math.max(1, Number(c.req.query("page") ?? 1) || 1);
+    // Floored, not just clamped: `start` indexes `films` directly, and a
+    // fractional `page` or `perPage` makes every index a miss. `slice` used to
+    // absorb that by truncating; a lookup does not.
+    const page = Math.max(1, Math.floor(Number(c.req.query("page") ?? 1)) || 1);
+    // `sample=1` replaces the page with a spread drawn from the whole
+    // watchlist. The interface asks for it because a page is a run of a sorted
+    // list: page one of an alphabetical watchlist is every film starting with
+    // an A, and an animation that riffles through those is visibly not riffling
+    // through the watchlist it claims to be drawing from.
+    const sampled = c.req.query("sample") === "1";
     // Capped at 100, not 500: every uncached film in the window queues behind
     // the one global `GLOBAL_REQ_PER_SEC` gate (8/s), and `buildBudgetMs`
     // covers `scrapeOnce` only — the enrich pass that follows is unbudgeted, so
     // a 500-film window is >60 s of queueing that only the edge timeout ends.
-    // 100 bounds that at ~12 s; the site's own client asks for POOL_PAGE_SIZE.
-    const perPage = Math.min(100, Math.max(1, Number(c.req.query("perPage") ?? 100) || 100));
+    // 100 bounds that at ~12 s; the site's own client asks for POOL_SIZE.
+    const perPage = Math.min(
+      100,
+      Math.max(1, Math.floor(Number(c.req.query("perPage") ?? 100)) || 100),
+    );
     try {
       const { films, complete, partial } = await builder.getWatchlist(user);
       const start = (page - 1) * perPage;
-      // Enrich the page, not the watchlist behind it.
-      const window = await builder.enrich(user, films.slice(start, start + perPage));
+      // The sample is seeded on the watchlist rather than on the request, so
+      // that every read of the same watchlist selects the same films. A fresh
+      // draw per request would be a fresh set of uncached films to enrich per
+      // request: measured at 7.6 s for sixty of them, against under a
+      // millisecond warm. Per-spin variety is the client's job — it builds a
+      // fresh reel out of the pool on every spin.
+      const indices = sampled
+        ? sampleIndices(films.length, perPage, mulberry32(seedFrom(`${user}:${films.length}`)))
+        : films.slice(start, start + perPage).map((_, i) => start + i);
+      // Enrich the films returned, not the watchlist behind them.
+      const window = await builder.enrich(
+        user,
+        indices.map((i) => films[i]),
+      );
       return c.json({
         count: films.length,
         complete,
         partial,
         page,
         perPage,
+        sampled,
+        // 1-based place in the watchlist, per returned film. Derivable from
+        // the page for a page; the only source of it for a sample.
+        positions: indices.map((i) => i + 1),
         films: window.map(shape),
       });
     } catch (e) {

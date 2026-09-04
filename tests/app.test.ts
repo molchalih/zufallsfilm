@@ -212,6 +212,104 @@ test("watchlist responses are paginated", async () => {
   expect(body.films[0].lid).toBe("b");
 });
 
+const bigWatchlist = Array.from({ length: 500 }, (_, i) => ({
+  lid: `l${i}`,
+  name: `F${i}`,
+  year: 2000,
+  url: `https://letterboxd.com/film/s${i}/`,
+}));
+
+const bigBuilder = {
+  async getWatchlist() {
+    return { films: bigWatchlist, complete: true, partial: false };
+  },
+  enrich: async (_user: string, films: any[]) => films,
+  whenSettled: async () => {},
+  inFlightCount: () => 0,
+};
+
+const bigApp = () =>
+  createApp({
+    builder: bigBuilder as any,
+    store: openStore(":memory:"),
+    cfg,
+    limiter: limiter(),
+    metrics: createMetrics(),
+  });
+
+test("a sampled watchlist read is spread across the list, not a run of its head", async () => {
+  // A page of a sorted watchlist is its alphabetical head, and an animation
+  // riffling through that is visibly not riffling through the watchlist.
+  const body = await json(await bigApp().request("/watchlist/u?perPage=60&sample=1"));
+  expect(body.sampled).toBe(true);
+  expect(body.films).toHaveLength(60);
+  const positions = body.positions as number[];
+  expect(positions).toHaveLength(60);
+  expect(new Set(positions).size).toBe(60);
+  expect(Math.max(...positions)).toBeGreaterThan(400);
+  expect(positions).not.toEqual([...positions].sort((a, b) => a - b));
+});
+
+test("a sampled film carries the position it holds in the watchlist", async () => {
+  const body = await json(await bigApp().request("/watchlist/u?perPage=60&sample=1"));
+  for (const [i, film] of body.films.entries()) {
+    expect(film.lid).toBe(`l${body.positions[i] - 1}`);
+  }
+});
+
+test("the same watchlist samples the same films on every read", async () => {
+  // A fresh draw per request is a fresh set of uncached films to enrich per
+  // request: measured at 7.6 s for sixty of them, against under a ms warm.
+  const one = await json(await bigApp().request("/watchlist/u?perPage=60&sample=1"));
+  const two = await json(await bigApp().request("/watchlist/u?perPage=60&sample=1"));
+  expect(two.positions).toEqual(one.positions);
+  const other = await json(await bigApp().request("/watchlist/someoneelse?perPage=60&sample=1"));
+  expect(other.positions).not.toEqual(one.positions);
+});
+
+test("a sample enriches only the films it returns", async () => {
+  let enriched = 0;
+  const app = createApp({
+    builder: {
+      ...bigBuilder,
+      async enrich(_user: string, films: any[]) {
+        enriched += films.length;
+        return films;
+      },
+    } as any,
+    store: openStore(":memory:"),
+    cfg,
+    limiter: limiter(),
+    metrics: createMetrics(),
+  });
+  await app.request("/watchlist/u?perPage=60&sample=1");
+  expect(enriched).toBe(60);
+});
+
+test("a fractional page is floored, not used to index the watchlist", async () => {
+  // `start` indexes `films` directly now. A fractional `page` or `perPage`
+  // made every index a miss, and the TypeError surfaced as a fabricated
+  // `502 upstream_blocked`.
+  for (const query of ["perPage=1.5&page=2", "page=1.05&perPage=10"]) {
+    const res = await bigApp().request(`/watchlist/u?${query}`);
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    expect(body.films.length).toBeGreaterThan(0);
+    for (const p of body.positions) expect(Number.isInteger(p)).toBe(true);
+    expect(body.films.map((f: any) => f.lid)).toEqual(
+      body.positions.map((p: number) => `l${p - 1}`),
+    );
+  }
+});
+
+test("a page read stays a page, and says where its films sit", async () => {
+  const body = await json(await bigApp().request("/watchlist/u?perPage=25&page=3"));
+  expect(body.sampled).toBe(false);
+  expect(body.films[0].lid).toBe("l50");
+  expect(body.positions[0]).toBe(51);
+  expect(body.positions.at(-1)).toBe(75);
+});
+
 test("an oversized perPage is clamped to the enrich cap, not honoured", async () => {
   const app = createApp({
     builder: okBuilder as any,
