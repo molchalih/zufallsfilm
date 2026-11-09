@@ -69,6 +69,26 @@ test("a null runtime expires on the short negative TTL", () => {
   s.close();
 });
 
+test("countFilms reports the number of cached films", () => {
+  const s = fresh();
+  expect(s.countFilms()).toBe(0);
+  s.putFilm({ lid: "a", runtime: 90, rating: null, poster: null, director: null }, 1000);
+  s.putFilm({ lid: "b", runtime: 90, rating: null, poster: null, director: null }, 1000);
+  expect(s.countFilms()).toBe(2);
+  s.close();
+});
+
+test("countUsers reports the number of members with a stored scrape", () => {
+  const s = fresh();
+  expect(s.countUsers()).toBe(0);
+  s.putWatchlist("u", [f("a")], 1, 1000);
+  s.putWatchlist("v", [f("b")], 1, 1000);
+  // Re-scraping the same member must not double-count.
+  s.putWatchlist("u", [f("c")], 1, 2000);
+  expect(s.countUsers()).toBe(2);
+  s.close();
+});
+
 test("migrations are idempotent and stamp the schema version", () => {
   const path = `/tmp/picker-migrate-${Math.random().toString(36).slice(2)}.sqlite`;
   const a = openStore(path);

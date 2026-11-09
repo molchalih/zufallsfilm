@@ -130,8 +130,10 @@ export function createApiBuilder(deps: {
    */
   function commit(username: string, films: EnrichedFilm[], expected: number) {
     const unique = [...new Map(films.map((f) => [f.lid, f])).values()];
-    metrics.observe("watchlist_yield_ratio", expected === 0 ? 0 : unique.length / expected);
-    metrics.inc(unique.length === expected ? "watchlist_complete" : "watchlist_short");
+    metrics.recordWatchlist(
+      unique.length === expected,
+      expected === 0 ? 0 : unique.length / expected,
+    );
     if (unique.length !== expected) {
       log(
         JSON.stringify({

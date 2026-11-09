@@ -25,11 +25,15 @@ single build.
 | `GET /watchlist/:user` | `page`, `perPage` (default and max 100), `sample` | `{count, complete, partial, sampled, positions[], films[]}` |
 | `GET /progress/:user` | none | `{done, total}` for a read in flight |
 | `GET /health` | none | `{status, version, egress, inFlight}` |
-| `GET /metrics` | none | Counters and observations |
 
 ```bash
 curl "https://zufalls.film/pick?user=examplemember&maxRuntime=100"
 ```
+
+Operational metrics are not public. They are exposed in Prometheus format on an
+internal-only second listener (`METRICS_PORT`, default `9091`), reached solely
+through the deployment's metrics sidecar and never published to the host. See
+`docs/DESIGN.md` § Observability.
 
 `sample=1` returns `perPage` films drawn from across the whole watchlist,
 shuffled, instead of a page of it; `page` is then ignored. `positions[i]` is
