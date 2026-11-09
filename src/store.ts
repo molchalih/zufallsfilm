@@ -214,8 +214,16 @@ export function openStore(path: string) {
       ).run(meta.lid, meta.runtime, meta.rating, meta.poster, meta.director, now);
     },
 
+    countFilms(): number {
+      return (db.query(`SELECT COUNT(*) AS c FROM film`).get() as { c: number }).c;
+    },
+
+    countUsers(): number {
+      return (db.query(`SELECT COUNT(*) AS c FROM scrape`).get() as { c: number }).c;
+    },
+
     evictFilms(cap: number): number {
-      const { c } = db.query(`SELECT COUNT(*) AS c FROM film`).get() as { c: number };
+      const c = this.countFilms();
       if (c <= cap) return 0;
       const n = c - cap;
       db.prepare(

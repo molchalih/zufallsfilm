@@ -49,7 +49,8 @@ Do not skip it with `--no-verify`.
 | `src/store.ts` | `bun:sqlite` persistence — three tables, ordered append-only migrations, TTLs |
 | `src/picker.ts` | The draw, and the `maxRuntime` filter |
 | `src/ratelimit.ts` | Inbound metering per client address: a token bucket, plus a distinct-username cap |
-| `src/metrics.ts` | In-process counters and observations, served by `GET /metrics` |
+| `src/metrics.ts` | Prometheus metric set (`prom-client`), one isolated registry per instance |
+| `src/metricsServer.ts` | The internal-only Prometheus listener (`METRICS_PORT`), reached solely via the mTLS sidecar. See `docs/decisions/DR-005` |
 | `src/types.ts` | The shapes shared across the modules above |
 | `src/app.ts` | Hono routes, request logging, and the `STATUS` map of `reason` to HTTP status |
 | `src/index.ts` | Wiring — it picks the builder — signal handling, the Bun server export |

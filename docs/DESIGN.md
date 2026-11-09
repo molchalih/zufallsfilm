@@ -203,7 +203,6 @@ limit exist to avoid.
 |---|---|---|
 | `GET /` | — | The interface. Bundled by `Bun.serve`, not routed by Hono |
 | `GET /health` | — | `{status, version, egress, inFlight}` |
-| `GET /metrics` | — | A flat counter and observation snapshot |
 | `GET /progress/:user` | — | `{done, total}` for the enrichment a caller is waiting on, or zeroes |
 | `GET /pick` | `user` (required), `maxRuntime` (optional, minutes) | One film, plus `partial`, `pool` and `position` |
 | `GET /watchlist/:user` | `page`, `perPage` (default 100, max 100), `sample`, `refresh` | `{count, complete, sampled, positions[], films[]}` |
@@ -230,6 +229,36 @@ measured at 7.6 s for sixty of them against under a millisecond warm — which
 would have made every visit pay a cold enrichment forever. The per-spin variety
 the animations show comes from the client instead: the reel it builds from the
 pool is drawn fresh on every spin.
+
+## Observability
+
+Metrics are Prometheus text exposition, served on a **separate internal
+listener** — `METRICS_PORT`, default `9091`, bound `0.0.0.0` inside the
+container — not on the public app and not on the Hono router. It answers only
+`GET /metrics`. The exposure model, and why the bind is `0.0.0.0` rather than
+loopback, are in `docs/decisions/DR-005-internal-metrics-endpoint.md`: the port
+is never published off the container, and the mTLS metrics sidecar is the only
+thing on the private network that can reach it.
+
+The series, via `prom-client`:
+
+| Metric | Type | Labels | Source |
+|---|---|---|---|
+| `http_requests_total` | counter | `route`, `status` | Every request, labelled by matched route pattern (never the raw path) |
+| `http_request_duration_seconds` | histogram | `route`, `status` | The same request's wall time |
+| `zufallsfilm_scrapes_total` | counter | `outcome` = `complete` \| `incomplete` | `html`-path whole-watchlist scrapes |
+| `zufallsfilm_watchlist_total` | counter | `outcome` = `complete` \| `short` | `api`-path builds |
+| `zufallsfilm_enrich_total` | counter | `outcome` = `hit` \| `miss` \| `error` | Per-film enrichment lookups |
+| `zufallsfilm_unhandled_errors_total` | counter | — | Requests that reached the error boundary |
+| `zufallsfilm_scrape_yield_ratio` | histogram | — | Fraction of a scrape's expected films parsed |
+| `zufallsfilm_watchlist_yield_ratio` | histogram | — | Fraction of a member's expected films the API returned |
+| `zufallsfilm_items_cached` | gauge | — | `COUNT(*)` of the `film` table, read at scrape time |
+| `zufallsfilm_users` | gauge | — | Members with a stored `scrape` row, read at scrape time |
+
+The two gauges are read straight from SQLite each time Prometheus scrapes, so
+they are the live table counts rather than a value a writer has to remember to
+update. Node's process metrics (`process_*`, `nodejs_*`) ride the same registry
+in production.
 
 A sample can only spread across what has been read. A cold build serves page
 one while the rest backfills, so `getWatchlist` returns 28 films and a sample of

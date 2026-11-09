@@ -96,8 +96,9 @@ export function createApp(deps: {
     const t0 = Date.now();
     await next();
     const ms = Date.now() - t0;
-    metrics.inc(`http_${c.res.status}`);
-    metrics.observe("http_ms", ms);
+    // The matched route pattern, not the raw path: `/watchlist/:user` is one
+    // series, never one per member. `routePath` is `/*` for an unmatched route.
+    metrics.recordHttp(c.req.routePath, c.res.status, ms / 1000);
     console.log(
       JSON.stringify({
         event: "request",
@@ -109,7 +110,10 @@ export function createApp(deps: {
     );
   });
 
-  app.get("/metrics", (c) => c.json(metrics.snapshot()));
+  // No `/metrics` here. The Prometheus endpoint is served off a separate
+  // internal listener (src/metricsServer.ts) reachable only through the mTLS
+  // sidecar, never on this public route: a public metrics page leaks internal
+  // counts even behind a `Disallow`.
 
   // Every route that names a user reaches Letterboxd on a miss, so an indexed
   // `/watchlist/<name>` turns a crawler's budget into outbound scrape volume
@@ -123,7 +127,6 @@ export function createApp(deps: {
         "Disallow: /watchlist/",
         "Disallow: /progress/",
         "Disallow: /health",
-        "Disallow: /metrics",
         "",
       ].join("\n"),
       200,
@@ -288,7 +291,7 @@ export function createApp(deps: {
   );
 
   app.onError((err, c) => {
-    metrics.inc("unhandled_error");
+    metrics.recordUnhandledError();
     console.error(
       JSON.stringify({
         event: "unhandled_error",

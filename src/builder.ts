@@ -126,8 +126,7 @@ export function createBuilder(deps: {
     const all = [...unique.values()];
     // The 44% silent-loss failure mode shows up here and nowhere else: every
     // page returns 200 and parses cleanly while the total quietly falls short.
-    metrics.observe("scrape_yield_ratio", total === 0 ? 0 : all.length / total);
-    metrics.inc(all.length === total ? "scrape_complete" : "scrape_incomplete");
+    metrics.recordScrape(all.length === total, total === 0 ? 0 : all.length / total);
     if (all.length !== total) {
       throw new BuildError(
         `Scrape incomplete: parsed ${all.length} of ${total}. Refusing to cache a partial watchlist.`,
@@ -199,11 +198,11 @@ export function createBuilder(deps: {
         try {
           const meta = await enricher.enrich(f);
           store.putFilm(meta, now());
-          metrics.inc(meta.runtime === null ? "enrich_miss" : "enrich_hit");
+          metrics.recordEnrich(meta.runtime === null ? "miss" : "hit");
           return meta;
         } catch {
           // An error is not a miss: return unknown without poisoning the cache.
-          metrics.inc("enrich_error");
+          metrics.recordEnrich("error");
           return { lid: f.lid, runtime: null, rating: null, poster: null, director: null };
         }
       } finally {

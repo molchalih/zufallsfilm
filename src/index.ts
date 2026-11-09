@@ -12,6 +12,7 @@ import { createFetcher, createRateGate } from "./fetcher";
 import { withHousePool } from "./house";
 import { createLetterboxd } from "./letterboxd";
 import { createMetrics } from "./metrics";
+import { startMetricsServer } from "./metricsServer";
 import { createLimiter } from "./ratelimit";
 import { openStore } from "./store";
 
@@ -26,7 +27,9 @@ if (cfg.dbPath !== ":memory:") {
 }
 const store = openStore(cfg.dbPath);
 
-const metrics = createMetrics();
+// The one long-lived registry turns on Node's process metrics; the per-test
+// instances leave them off. See src/metrics.ts.
+const metrics = createMetrics({ collectDefault: true });
 
 // One gate for whichever path is wired. Each path names its own ceiling: the
 // site is read four pages at a time under `GLOBAL_REQ_PER_SEC`, the API under
@@ -71,6 +74,12 @@ const evictTimer = setInterval(
   60 * 60 * 1000,
 );
 
+// The internal Prometheus listener, on its own port. Kept separate from the
+// public server below so metrics never ride the public route: this one is
+// reached only through the mTLS sidecar on the private container network. See
+// src/metricsServer.ts and docs/decisions/DR-005-internal-metrics-endpoint.md.
+const metricsServer = startMetricsServer({ metrics, store, port: cfg.metricsPort });
+
 // A container gets SIGTERM on `docker compose down`. Without this the timer
 // holds the loop open and the database is never closed, so its write-ahead log
 // is never checkpointed back into the file the volume actually carries.
@@ -81,6 +90,7 @@ for (const sig of ["SIGTERM", "SIGINT"] as const) {
     shuttingDown = true;
     console.log(JSON.stringify({ event: "shutdown", signal: sig }));
     clearInterval(evictTimer);
+    metricsServer.stop();
     store.close();
     process.exit(0);
   });
@@ -92,6 +102,7 @@ console.log(
   JSON.stringify({
     event: "start",
     port: cfg.port,
+    metricsPort: cfg.metricsPort,
     source: cfg.source,
     egress: cfg.egressProxy ? "proxy" : "direct",
     trustProxy: cfg.trustProxy,

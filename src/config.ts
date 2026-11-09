@@ -6,6 +6,7 @@ export type WatchlistSource = "html" | "api";
 
 export type Config = Readonly<{
   port: number;
+  metricsPort: number;
   version: string;
   dbPath: string;
   source: WatchlistSource;
@@ -68,6 +69,10 @@ export function loadConfig(env: Env): Config {
   const apiSecret = env.LETTERBOXD_API_SECRET ?? "";
   const cfg = Object.freeze({
     port: num(env, "PORT", 3000),
+    // A second listener, never published to the host or VLAN: the Prometheus
+    // endpoint is reached only through the mTLS sidecar on the private
+    // container network. See docs/decisions/DR-005-internal-metrics-endpoint.md.
+    metricsPort: num(env, "METRICS_PORT", 9091),
     // Stamped by the deployment, not derived from package.json: the running
     // container is the thing being identified, and its manifest version does
     // not move between releases.

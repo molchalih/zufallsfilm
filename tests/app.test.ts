@@ -413,7 +413,24 @@ test("an unhandled throw becomes a 500, not a hang", async () => {
   const r = await app.request("/health", { headers: { accept: "text/html" } });
   expect(r.status).toBe(500);
   expect(await r.text()).toContain("projector failure.");
-  expect(metrics.snapshot().unhandled_error).toBe(1);
+  expect(await metrics.expose()).toContain("zufallsfilm_unhandled_errors_total 1");
+});
+
+test("the public app no longer serves a metrics endpoint", async () => {
+  const app = createApp({
+    builder: {
+      getWatchlist: async () => ({ films: [], complete: true, partial: false }),
+      enrich: async (_user: string, films: any[]) => films,
+      whenSettled: async () => {},
+      inFlightCount: () => 0,
+    } as any,
+    store: openStore(":memory:"),
+    cfg,
+    limiter: limiter(),
+    metrics: createMetrics(),
+  });
+  // Metrics live only on the internal listener; the public route must 404.
+  expect((await app.request("/metrics")).status).toBe(404);
 });
 
 test("an unfiltered pick enriches one film, not the whole watchlist", async () => {

@@ -19,6 +19,11 @@ test("env overrides are parsed as numbers", () => {
   expect(c.maxWatchlist).toBe(100);
 });
 
+test("the internal metrics port defaults to 9091 and is overridable", () => {
+  expect(loadConfig({}).metricsPort).toBe(9091);
+  expect(loadConfig({ METRICS_PORT: "9100" }).metricsPort).toBe(9100);
+});
+
 test("egress proxy must be http, not socks", () => {
   expect(() => loadConfig({ EGRESS_PROXY: "socks5://127.0.0.1:1080" })).toThrow(/must be an http/i);
   expect(loadConfig({ EGRESS_PROXY: "http://127.0.0.1:3128" }).egressProxy).toBe(
